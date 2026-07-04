@@ -70,39 +70,19 @@ const MOCK_TRANSACTIONS: Transaction[] = [
   { id: 'tx3', type: 'sent', amount: 25, asset: 'USDT', chain: 'Arbitrum', toName: 'Carol', date: 'Jul 29, 4:20 PM', status: 'completed', txHash: '0xghi...' },
 ];
 
-// All Particle Network co-testnet supported chains for routing
+// EXACT chain IDs supported by Particle UA SDK v2 (from UNIVERSAL_ACCOUNT_VERSION_V2_SUPPORTED_CHAIN_IDS)
+// Only mainnet chains: [1, 8453, 42161, 56, 196, 101(Solana)]
 const UA_SUPPORTED_CHAINS: Record<string, { chainId: number; rpc: string; name: string }> = {
-  // Arbitrum
-  'arbitrum sepolia': { chainId: 421614, rpc: 'https://sepolia-rollup.arbitrum.io/rpc', name: 'Arbitrum Sepolia' },
-  'arbitrum': { chainId: 421614, rpc: 'https://sepolia-rollup.arbitrum.io/rpc', name: 'Arbitrum Sepolia' },
-  // Base
-  'base sepolia': { chainId: 84532, rpc: 'https://sepolia.base.org', name: 'Base Sepolia' },
-  'base': { chainId: 84532, rpc: 'https://sepolia.base.org', name: 'Base Sepolia' },
-  // Linea
-  'linea sepolia': { chainId: 59141, rpc: 'https://rpc.sepolia.linea.build', name: 'Linea Sepolia' },
-  'linea': { chainId: 59141, rpc: 'https://rpc.sepolia.linea.build', name: 'Linea Sepolia' },
-  // Avalanche
-  'avalanche fuji': { chainId: 43113, rpc: 'https://api.avax-test.network/ext/bc/C/rpc', name: 'Avalanche Fuji' },
-  'avalanche': { chainId: 43113, rpc: 'https://api.avax-test.network/ext/bc/C/rpc', name: 'Avalanche Fuji' },
-  // BNB Chain
-  'bnb chain': { chainId: 97, rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/', name: 'BNB Testnet' },
-  'bnb': { chainId: 97, rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/', name: 'BNB Testnet' },
-  // Berachain
-  'berachain': { chainId: 80084, rpc: 'https://artio.rpc.berachain.com/', name: 'Berachain bArtio' },
-  // Monad
-  'monad': { chainId: 10143, rpc: 'https://testnet-rpc.monad.xyz', name: 'Monad Testnet' },
-  'monad testnet': { chainId: 10143, rpc: 'https://testnet-rpc.monad.xyz', name: 'Monad Testnet' },
-  // Taiko
-  'taiko': { chainId: 167009, rpc: 'https://rpc.hekla.taiko.xyz', name: 'Taiko Hekla' },
-  'taiko hekla': { chainId: 167009, rpc: 'https://rpc.hekla.taiko.xyz', name: 'Taiko Hekla' },
-  // Zircuit
-  'zircuit': { chainId: 48899, rpc: 'https://zircuit1-testnet.p2pify.com', name: 'Zircuit Testnet' },
-  // Polygon
-  'polygon amoy': { chainId: 80002, rpc: 'https://rpc-amoy.polygon.technology', name: 'Polygon Amoy' },
-  'polygon': { chainId: 80002, rpc: 'https://rpc-amoy.polygon.technology', name: 'Polygon Amoy' },
+  'ethereum':   { chainId: 1,     rpc: 'https://eth.llamarpc.com',            name: 'Ethereum' },
+  'base':       { chainId: 8453,  rpc: 'https://mainnet.base.org',             name: 'Base' },
+  'arbitrum':   { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc',         name: 'Arbitrum One' },
+  'arbitrum one': { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc',       name: 'Arbitrum One' },
+  'bnb':        { chainId: 56,    rpc: 'https://bsc-dataseed.binance.org/',     name: 'BNB Chain' },
+  'bnb chain':  { chainId: 56,    rpc: 'https://bsc-dataseed.binance.org/',     name: 'BNB Chain' },
+  'x layer':    { chainId: 196,   rpc: 'https://rpc.xlayer.tech',              name: 'X Layer' },
 };
 
-// Chains to scan for native token balance — any testnet the user might hold assets on
+// Chains to scan for native token balance (any testnet/mainnet the user may hold assets on)
 const ALL_TESTNET_CHAINS = [
   { name: 'Monad Testnet',    rpc: 'https://testnet-rpc.monad.xyz' },
   { name: 'Arbitrum Sepolia', rpc: 'https://sepolia-rollup.arbitrum.io/rpc' },
@@ -369,40 +349,17 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
           setTimeout(() => refreshBalance(address), 8000);
           return txHash;
         } catch (err: any) {
-          console.warn('[Particle UA] Cross-chain swap failed, falling back to direct MetaMask transfer:', err?.message || err);
+          console.warn('[Particle UA] Cross-chain swap failed:', err?.message || err);
+          throw new Error(`Particle cross-chain swap failed: ${err?.message || err}`);
         }
       }
 
-      // Fallback: direct MetaMask native transfer on the user's current network
-      try {
-        const amountInWei = BigInt(Math.floor(amount * 1e18));
-        const valueHex = '0x' + amountInWei.toString(16);
-
-        const txHash = await (window as any).ethereum.request({
-          method: 'eth_sendTransaction',
-          params: [{ from: address, to: recipientAddress, value: valueHex }],
-        });
-
-        const newTx: Transaction = {
-          id: 'tx' + Date.now(),
-          type: 'sent',
-          amount,
-          asset,
-          chain,
-          toName: resolved ? resolved.name : to.substring(0, 8),
-          to: recipientAddress,
-          date: 'Just now',
-          status: 'completed',
-          txHash,
-        };
-
-        setTransactions(prev => [newTx, ...prev]);
-        setTimeout(() => refreshBalance(address), 5000);
-        return txHash;
-      } catch (error) {
-        console.error('Failed to send transaction via MetaMask:', error);
-        throw error;
-      }
+      // Chain not supported by Particle UA SDK v2 (mainnet only)
+      throw new Error(
+        `"${chain}" is not supported for cross-chain transfers.\n` +
+        `Particle Universal Account v2 only supports mainnet chains: Ethereum, Base, Arbitrum One, BNB Chain, X Layer.\n` +
+        `To use this feature, fund your wallet on one of those chains and select it as the destination.`
+      );
     } else {
       throw new Error('MetaMask is not connected or installed');
     }
