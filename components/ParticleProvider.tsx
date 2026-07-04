@@ -129,11 +129,8 @@ async function ensureSepoliaNetwork() {
   }
 }
 
-// All Particle Network co-testnet supported chains
+// All Particle Network co-testnet supported chains for routing
 const UA_SUPPORTED_CHAINS: Record<string, { chainId: number; rpc: string; name: string }> = {
-  // Ethereum
-  'ethereum sepolia': { chainId: 11155111, rpc: 'https://ethereum-sepolia-rpc.publicnode.com', name: 'Ethereum Sepolia' },
-  'ethereum': { chainId: 11155111, rpc: 'https://ethereum-sepolia-rpc.publicnode.com', name: 'Ethereum Sepolia' },
   // Arbitrum
   'arbitrum sepolia': { chainId: 421614, rpc: 'https://sepolia-rollup.arbitrum.io/rpc', name: 'Arbitrum Sepolia' },
   'arbitrum': { chainId: 421614, rpc: 'https://sepolia-rollup.arbitrum.io/rpc', name: 'Arbitrum Sepolia' },
@@ -151,18 +148,30 @@ const UA_SUPPORTED_CHAINS: Record<string, { chainId: number; rpc: string; name: 
   'bnb': { chainId: 97, rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/', name: 'BNB Testnet' },
   // Berachain
   'berachain': { chainId: 80084, rpc: 'https://artio.rpc.berachain.com/', name: 'Berachain bArtio' },
+  // Monad
+  'monad': { chainId: 10143, rpc: 'https://testnet-rpc.monad.xyz', name: 'Monad Testnet' },
+  'monad testnet': { chainId: 10143, rpc: 'https://testnet-rpc.monad.xyz', name: 'Monad Testnet' },
+  // Taiko
+  'taiko': { chainId: 167009, rpc: 'https://rpc.hekla.taiko.xyz', name: 'Taiko Hekla' },
+  'taiko hekla': { chainId: 167009, rpc: 'https://rpc.hekla.taiko.xyz', name: 'Taiko Hekla' },
+  // Zircuit
+  'zircuit': { chainId: 48899, rpc: 'https://zircuit1-testnet.p2pify.com', name: 'Zircuit Testnet' },
   // Polygon
   'polygon amoy': { chainId: 80002, rpc: 'https://rpc-amoy.polygon.technology', name: 'Polygon Amoy' },
   'polygon': { chainId: 80002, rpc: 'https://rpc-amoy.polygon.technology', name: 'Polygon Amoy' },
 };
 
+// Chains to scan for native token balance — any testnet the user might hold assets on
 const ALL_TESTNET_CHAINS = [
-  { name: 'Ethereum Sepolia', rpc: 'https://ethereum-sepolia-rpc.publicnode.com' },
+  { name: 'Monad Testnet',    rpc: 'https://testnet-rpc.monad.xyz' },
   { name: 'Arbitrum Sepolia', rpc: 'https://sepolia-rollup.arbitrum.io/rpc' },
   { name: 'Base Sepolia',     rpc: 'https://sepolia.base.org' },
   { name: 'Linea Sepolia',    rpc: 'https://rpc.sepolia.linea.build' },
   { name: 'Avalanche Fuji',   rpc: 'https://api.avax-test.network/ext/bc/C/rpc' },
   { name: 'BNB Testnet',      rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/' },
+  { name: 'Berachain bArtio', rpc: 'https://artio.rpc.berachain.com/' },
+  { name: 'Taiko Hekla',      rpc: 'https://rpc.hekla.taiko.xyz' },
+  { name: 'Zircuit Testnet',  rpc: 'https://zircuit1-testnet.p2pify.com' },
   { name: 'Polygon Amoy',     rpc: 'https://rpc-amoy.polygon.technology' },
 ];
 
@@ -296,12 +305,9 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
 
     if (typeof window !== 'undefined' && (window as any).ethereum) {
       try {
-        // Request MetaMask account
+        // Request MetaMask account — stay on whatever chain the user is on
         const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
         const userAddress = accounts[0];
-
-        // Ensure wallet is switched to Sepolia
-        await ensureSepoliaNetwork();
 
         // Simulate EIP-7702 upgrade flow delay
         await new Promise(resolve => setTimeout(resolve, 2500));

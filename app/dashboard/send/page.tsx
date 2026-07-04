@@ -17,17 +17,19 @@ export default function SendPage() {
   );
 }
 
-const ASSETS = ['USDC', 'USDT', 'ETH', 'MATIC', 'BNB', 'AVAX'];
+const ASSETS = ['USDC', 'USDT', 'ETH', 'MATIC', 'BNB', 'AVAX', 'MON'];
 
 // All Particle Network co-testnet supported destination chains
 const CHAINS = [
-  { label: 'Ethereum Sepolia', value: 'Ethereum Sepolia', explorer: 'https://sepolia.etherscan.io/tx' },
+  { label: 'Monad Testnet',    value: 'Monad Testnet',    explorer: 'https://testnet.monadexplorer.com/tx' },
   { label: 'Arbitrum Sepolia', value: 'Arbitrum Sepolia', explorer: 'https://sepolia.arbiscan.io/tx' },
   { label: 'Base Sepolia',     value: 'Base Sepolia',     explorer: 'https://sepolia-explorer.base.org/tx' },
   { label: 'Linea Sepolia',    value: 'Linea Sepolia',    explorer: 'https://sepolia.lineascan.build/tx' },
   { label: 'Avalanche Fuji',   value: 'Avalanche Fuji',   explorer: 'https://testnet.snowtrace.io/tx' },
   { label: 'BNB Testnet',      value: 'BNB Chain',        explorer: 'https://testnet.bscscan.com/tx' },
   { label: 'Berachain bArtio', value: 'Berachain',        explorer: 'https://artio.beratrail.io/tx' },
+  { label: 'Taiko Hekla',      value: 'Taiko Hekla',      explorer: 'https://hekla.taikoscan.io/tx' },
+  { label: 'Zircuit Testnet',  value: 'Zircuit',          explorer: 'https://explorer.testnet.zircuit.com/tx' },
   { label: 'Polygon Amoy',     value: 'Polygon Amoy',     explorer: 'https://amoy.polygonscan.com/tx' },
 ];
 
@@ -41,7 +43,7 @@ function SendPageInner() {
   const [resolvedContact, setResolvedContact] = useState<Contact | null>(null);
   const [amount, setAmount] = useState('');
   const [asset, setAsset] = useState('USDC');
-  const [chain, setChain] = useState('Base Sepolia');
+  const [chain, setChain] = useState('Monad Testnet');
   const [note, setNote] = useState('');
   const [txHash, setTxHash] = useState('');
   const [sendStep, setSendStep] = useState(0);
