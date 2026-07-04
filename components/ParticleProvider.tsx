@@ -2,53 +2,11 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-// Dynamically import UniversalAccount to prevent Next.js SSR build errors
 let UniversalAccount: any;
 if (typeof window !== 'undefined') {
   try {
     const sdk = require('@particle-network/universal-account-sdk');
     UniversalAccount = sdk.UniversalAccount;
-    // Monkey-patch testnet chain IDs into supported chain validation array to enable testnets!
-    const testnetIds = [84532, 421614, 59141, 43113, 97, 80084, 10143, 167009, 48899, 80002, 11155111];
-    if (sdk.UNIVERSAL_ACCOUNT_VERSION_V2_SUPPORTED_CHAIN_IDS) {
-      testnetIds.forEach(id => {
-        if (!sdk.UNIVERSAL_ACCOUNT_VERSION_V2_SUPPORTED_CHAIN_IDS.includes(id)) {
-          sdk.UNIVERSAL_ACCOUNT_VERSION_V2_SUPPORTED_CHAIN_IDS.push(id);
-        }
-      });
-    }
-
-    // Inject testnet token configurations so getSupportedToken() successfully resolves them
-    if (sdk.SUPPORTED_PRIMARY_TOKENS) {
-      const testnetTokens = [
-        // Base Sepolia (84532)
-        { assetId: 'eth', type: 'eth', chainId: 84532, address: '0x0000000000000000000000000000000000000000', decimals: 18, realDecimals: 18, isMultiChain: true, isMultiChainDefault: false },
-        { assetId: 'usdc', type: 'usdc', chainId: 84532, address: '0x03c6b3f930c25f414570d187214742a0b165b4c1', decimals: 18, realDecimals: 6, isMultiChain: true, isMultiChainDefault: false },
-        { assetId: 'usdt', type: 'usdt', chainId: 84532, address: '0x0000000000000000000000000000000000000000', decimals: 18, realDecimals: 6, isMultiChain: true, isMultiChainDefault: false },
-        
-        // Arbitrum Sepolia (421614)
-        { assetId: 'eth', type: 'eth', chainId: 421614, address: '0x0000000000000000000000000000000000000000', decimals: 18, realDecimals: 18, isMultiChain: true, isMultiChainDefault: false },
-        { assetId: 'usdc', type: 'usdc', chainId: 421614, address: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', decimals: 18, realDecimals: 6, isMultiChain: true, isMultiChainDefault: false },
-        
-        // Polygon Amoy (80002)
-        { assetId: 'matic', type: 'matic', chainId: 80002, address: '0x0000000000000000000000000000000000000000', decimals: 18, realDecimals: 18, isMultiChain: true, isMultiChainDefault: false },
-        { assetId: 'usdc', type: 'usdc', chainId: 80002, address: '0x41e94eb25b4c1852d4857ec9027593d49521d8f2', decimals: 18, realDecimals: 6, isMultiChain: true, isMultiChainDefault: false },
-
-        // Monad Testnet (10143)
-        { assetId: 'mon', type: 'mon', chainId: 10143, address: '0x0000000000000000000000000000000000000000', decimals: 18, realDecimals: 18, isMultiChain: true, isMultiChainDefault: false },
-        { assetId: 'eth', type: 'eth', chainId: 10143, address: '0x0000000000000000000000000000000000000000', decimals: 18, realDecimals: 18, isMultiChain: true, isMultiChainDefault: false },
-        { assetId: 'usdc', type: 'usdc', chainId: 10143, address: '0xf817257fed0c2ef0f4077884d08c62c3c6f491c1', decimals: 18, realDecimals: 6, isMultiChain: true, isMultiChainDefault: false }
-      ];
-
-      testnetTokens.forEach(token => {
-        const exists = sdk.SUPPORTED_PRIMARY_TOKENS.some(
-          (t: any) => t.type === token.type && t.chainId === token.chainId
-        );
-        if (!exists) {
-          sdk.SUPPORTED_PRIMARY_TOKENS.push(token);
-        }
-      });
-    }
   } catch (e) {
     console.error('Failed to load @particle-network/universal-account-sdk', e);
   }
@@ -112,71 +70,13 @@ const MOCK_TRANSACTIONS: Transaction[] = [
   { id: 'tx3', type: 'sent', amount: 25, asset: 'USDT', chain: 'Arbitrum', toName: 'Carol', date: 'Jul 29, 4:20 PM', status: 'completed', txHash: '0xghi...' },
 ];
 
-// All Particle Network co-testnet and mainnet supported chains for routing
-const UA_SUPPORTED_CHAINS: Record<string, { chainId: number; rpc: string; name: string }> = {
-  // Testnets
-  'monad testnet': { chainId: 10143, rpc: 'https://testnet-rpc.monad.xyz', name: 'Monad Testnet' },
-  'monad': { chainId: 10143, rpc: 'https://testnet-rpc.monad.xyz', name: 'Monad Testnet' },
-  'base sepolia': { chainId: 84532, rpc: 'https://sepolia.base.org', name: 'Base Sepolia' },
-  'arbitrum sepolia': { chainId: 421614, rpc: 'https://sepolia-rollup.arbitrum.io/rpc', name: 'Arbitrum Sepolia' },
-  'linea sepolia': { chainId: 59141, rpc: 'https://rpc.sepolia.linea.build', name: 'Linea Sepolia' },
-  'avalanche fuji': { chainId: 43113, rpc: 'https://api.avax-test.network/ext/bc/C/rpc', name: 'Avalanche Fuji' },
-  'bnb testnet': { chainId: 97, rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/', name: 'BNB Testnet' },
-  'berachain': { chainId: 80084, rpc: 'https://artio.rpc.berachain.com/', name: 'Berachain bArtio' },
-  'taiko hekla': { chainId: 167009, rpc: 'https://rpc.hekla.taiko.xyz', name: 'Taiko Hekla' },
-  'zircuit testnet': { chainId: 48899, rpc: 'https://zircuit1-testnet.p2pify.com', name: 'Zircuit Testnet' },
-  'polygon amoy': { chainId: 80002, rpc: 'https://rpc-amoy.polygon.technology', name: 'Polygon Amoy' },
-
-  // Mainnets (Fallback mappings)
-  'ethereum': { chainId: 1, rpc: 'https://eth.llamarpc.com', name: 'Ethereum' },
-  'base': { chainId: 8453, rpc: 'https://mainnet.base.org', name: 'Base' },
-  'arbitrum': { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc', name: 'Arbitrum One' },
-  'arbitrum one': { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc', name: 'Arbitrum One' },
-  'bnb': { chainId: 56, rpc: 'https://bsc-dataseed.binance.org/', name: 'BNB Chain' },
-  'bnb chain': { chainId: 56, rpc: 'https://bsc-dataseed.binance.org/', name: 'BNB Chain' },
-  'x layer': { chainId: 196, rpc: 'https://rpc.xlayer.tech', name: 'X Layer' },
+const UA_SUPPORTED_CHAINS: Record<string, { chainId: number; name: string }> = {
+  'ethereum': { chainId: 1, name: 'Ethereum' },
+  'base': { chainId: 8453, name: 'Base' },
+  'arbitrum': { chainId: 42161, name: 'Arbitrum One' },
+  'bnb': { chainId: 56, name: 'BNB Chain' },
+  'x layer': { chainId: 196, name: 'X Layer' }
 };
-
-// Chains to scan for native token balance (any testnet/mainnet the user may hold assets on)
-const ALL_TESTNET_CHAINS = [
-  { name: 'Monad Testnet', rpc: 'https://testnet-rpc.monad.xyz' },
-  { name: 'Arbitrum Sepolia', rpc: 'https://sepolia-rollup.arbitrum.io/rpc' },
-  { name: 'Base Sepolia', rpc: 'https://sepolia.base.org' },
-  { name: 'Linea Sepolia', rpc: 'https://rpc.sepolia.linea.build' },
-  { name: 'Avalanche Fuji', rpc: 'https://api.avax-test.network/ext/bc/C/rpc' },
-  { name: 'BNB Testnet', rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/' },
-  { name: 'Berachain bArtio', rpc: 'https://artio.rpc.berachain.com/' },
-  { name: 'Taiko Hekla', rpc: 'https://rpc.hekla.taiko.xyz' },
-  { name: 'Zircuit Testnet', rpc: 'https://zircuit1-testnet.p2pify.com' },
-  { name: 'Polygon Amoy', rpc: 'https://rpc-amoy.polygon.technology' },
-];
-
-async function fetchBalanceOnChain(address: string, rpcUrl: string): Promise<number> {
-  try {
-    const res = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [address, 'latest'] }),
-    });
-    const data = await res.json();
-    if (data && data.result) return Number(BigInt(data.result)) / 1e18;
-  } catch { }
-  return 0;
-}
-
-async function fetchUniversalBalance(address: string): Promise<{ total: number; breakdown: Record<string, number> }> {
-  const breakdown: Record<string, number> = {};
-  let total = 0;
-  await Promise.all(
-    ALL_TESTNET_CHAINS.map(async c => {
-      const bal = await fetchBalanceOnChain(address, c.rpc);
-      breakdown[c.name] = bal;
-      total += bal;
-    })
-  );
-  return { total, breakdown };
-}
-
 
 export function ParticleProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
@@ -199,34 +99,21 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
   const refreshBalance = async (userAddress: string) => {
     if (!userAddress) return;
     try {
-      // Aggregate balance across all supported testnet chains
-      const { total } = await fetchUniversalBalance(userAddress);
-
-      // Also try to get UA primary assets (supported chains only)
-      let uaAssetBalance = 0;
       if (UniversalAccount && process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID) {
-        try {
-          const ua = new UniversalAccount({
-            projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
-            projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-            projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
-            ownerAddress: userAddress,
-          });
-          const assets = await ua.getPrimaryAssets();
-          if (assets && assets.length > 0) {
-            uaAssetBalance = assets.reduce((acc: number, a: any) => acc + (parseFloat(a.amount) || 0), 0);
-          }
-        } catch { /* UA may not have assets yet */ }
-      }
-
-      const fetchedBalance = total + uaAssetBalance;
-      setBalance(fetchedBalance);
-
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        parsed.balance = fetchedBalance;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        const ua = new UniversalAccount({
+          projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
+          projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+          projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
+          ownerAddress: userAddress,
+        });
+        const result = await ua.getPrimaryAssets();
+        if (result && result.assets) {
+          const totalUsdBalance = result.assets.reduce(
+            (acc: number, asset: any) => acc + (parseFloat(asset.amountInUSD) || 0),
+            0
+          );
+          setBalance(totalUsdBalance);
+        }
       }
     } catch (err) {
       console.error('Error refreshing balance:', err);
@@ -246,19 +133,14 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         setBalance(balance);
         setActiveChains(activeChains);
 
-        // Re-initialize Particle Universal Account instance
         if (UniversalAccount && process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID && address) {
-          try {
-            const ua = new UniversalAccount({
-              projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
-              projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-              projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
-              ownerAddress: address,
-            });
-            setUaInstance(ua);
-          } catch (e) {
-            console.error('Failed to re-initialize Universal Account:', e);
-          }
+          const ua = new UniversalAccount({
+            projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
+            projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+            projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
+            ownerAddress: address,
+          });
+          setUaInstance(ua);
         }
       }
     } catch { } finally {
@@ -281,40 +163,36 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
 
     if (typeof window !== 'undefined' && (window as any).ethereum) {
       try {
-        // Request MetaMask account — stay on whatever chain the user is on
         const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
         const userAddress = accounts[0];
 
-        // Simulate EIP-7702 upgrade flow delay
-        await new Promise(resolve => setTimeout(resolve, 2500));
-
-        // Aggregate balance across all supported testnet chains
-        const { total: nativeBalance } = await fetchUniversalBalance(userAddress);
-        const chainsList = ALL_TESTNET_CHAINS.map(c => c.name);
-
-        // Initialize Particle Universal Account
         let ua: any = null;
-        let uaBalance = 0;
+        let fetchedBalance = 0;
+
         if (UniversalAccount && process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID) {
+          ua = new UniversalAccount({
+            projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
+            projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+            projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
+            ownerAddress: userAddress,
+          });
+          setUaInstance(ua);
+
           try {
-            ua = new UniversalAccount({
-              projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
-              projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-              projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
-              ownerAddress: userAddress,
-            });
-            setUaInstance(ua);
-            const assets = await ua.getPrimaryAssets();
-            if (assets && assets.length > 0) {
-              uaBalance = assets.reduce((acc: number, a: any) => acc + (parseFloat(a.amount) || 0), 0);
+            const result = await ua.getPrimaryAssets();
+            if (result && result.assets) {
+              fetchedBalance = result.assets.reduce(
+                (acc: number, asset: any) => acc + (parseFloat(asset.amountInUSD) || 0),
+                0
+              );
             }
-          } catch { /* UA may not have indexed assets yet */ }
+          } catch {}
         }
 
         const walletData = {
           address: userAddress,
-          balance: nativeBalance + uaBalance,
-          activeChains: chainsList,
+          balance: fetchedBalance,
+          activeChains: ['Ethereum', 'Base', 'Arbitrum One', 'BNB Chain', 'X Layer'],
         };
 
         setIsConnected(true);
@@ -323,17 +201,14 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         setActiveChains(walletData.activeChains);
         setIsUpgrading(false);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(walletData));
-        return;
       } catch (e) {
         console.error('MetaMask/UniversalAccount connection failed', e);
         setIsUpgrading(false);
-        alert('Failed to connect to MetaMask. Make sure it is installed and unlocked.');
-        return;
+        alert('Failed to connect to MetaMask.');
       }
     } else {
       setIsUpgrading(false);
-      alert('MetaMask is not installed. Please install it to use Live Testnet Mode.');
-      return;
+      alert('MetaMask is not installed.');
     }
   };
 
@@ -359,18 +234,11 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         recipientAddress = '0x9965507B1a0595C5411CC4457ED061b402C82F24';
       }
 
-      // Try Particle Universal Account cross-chain convert transaction
-      // UA v2 supports: Base Sepolia (84532), Polygon Amoy (80002), and mainnets
       const chainKey = chain.toLowerCase();
-      const targetChainInfo = UA_SUPPORTED_CHAINS[chainKey];
+      const targetChainInfo = UA_SUPPORTED_CHAINS[chainKey] || { chainId: 8453, name: 'Base' };
 
-      console.log(`[Particle UA] Creating cross-chain convert transaction → ${targetChainInfo.chainId} - ${asset.toLowerCase()}`);
-
-
-      if (uaInstance && targetChainInfo) {
+      if (uaInstance) {
         try {
-          console.log(`[Particle UA] Creating cross-chain convert transaction → ${targetChainInfo.chainId} - ${asset.toLowerCase()}`);
-
           const transaction = await uaInstance.createConvertTransaction({
             expectToken: {
               type: asset.toLowerCase(),
@@ -379,18 +247,13 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
             chainId: targetChainInfo.chainId,
           });
 
-          console.log(transaction);
-
-          // Sign the rootHash using MetaMask personal_sign
           const signature = await (window as any).ethereum.request({
             method: 'personal_sign',
             params: [transaction.rootHash, address],
           });
 
-          // Broadcast via Particle
           const result = await uaInstance.sendTransaction(transaction, signature);
           const txHash = result.transactionId;
-          console.log('[Particle UA] Cross-chain swap submitted!', txHash);
 
           const newTx: Transaction = {
             id: 'tx' + Date.now(),
@@ -409,17 +272,12 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
           setTimeout(() => refreshBalance(address), 8000);
           return txHash;
         } catch (err: any) {
-          console.warn('[Particle UA] Cross-chain swap failed:', err?.message || err);
-          throw new Error(`Particle cross-chain swap failed: ${err?.message || err}`);
+          console.error('[Particle UA] Cross-chain convert transaction failed:', err);
+          throw new Error(err.message || 'Cross-chain swap failed');
         }
       }
+      throw new Error('Universal Account instance is not initialized.');
 
-      // Chain not supported by Particle UA SDK v2 (mainnet only)
-      throw new Error(
-        `"${chain}" is not supported for cross-chain transfers.\n` +
-        `Particle Universal Account v2 only supports mainnet chains: Ethereum, Base, Arbitrum One, BNB Chain, X Layer.\n` +
-        `To use this feature, fund your wallet on one of those chains and select it as the destination.`
-      );
     } else {
       throw new Error('MetaMask is not connected or installed');
     }
