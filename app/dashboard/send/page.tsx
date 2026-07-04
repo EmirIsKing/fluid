@@ -47,6 +47,7 @@ function SendPageInner() {
   const [note, setNote] = useState('');
   const [txHash, setTxHash] = useState('');
   const [sendStep, setSendStep] = useState(0);
+  const [showRouting, setShowRouting] = useState(false);
 
   // Resolve @username as user types
   useEffect(() => {
@@ -152,33 +153,49 @@ function SendPageInner() {
             </p>
           </div>
 
-          {/* Recipient receives */}
+          {/* Advanced / Routing settings */}
           <div>
-            <label style={{ color: 'var(--text-muted)' }} className="block text-sm mb-2">
-              Recipient receives <span style={{ color: 'var(--accent)' }}>(auto-routed by Particle)</span>
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="relative">
-                <select
-                  className="input-dark appearance-none pr-8"
-                  value={asset}
-                  onChange={e => setAsset(e.target.value)}
-                >
-                  {ASSETS.map(a => <option key={a}>{a}</option>)}
-                </select>
-                <ChevronDown size={14} style={{ color: 'var(--text-muted)', position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            <button
+              type="button"
+              onClick={() => setShowRouting(!showRouting)}
+              style={{ color: 'var(--text-muted)' }}
+              className="text-xs hover:text-white flex items-center gap-1 transition-colors mt-2"
+            >
+              <span>{showRouting ? 'Hide' : 'Show'} routing settings</span>
+              <ChevronDown size={12} className={`transform transition-transform ${showRouting ? 'rotate-180' : ''}`} />
+            </button>
+
+            {showRouting && (
+              <div className="mt-3 p-4 rounded-xl space-y-4 border border-[var(--border)] fade-in-up" style={{ backgroundColor: 'var(--bg-elevated)' }}>
+                <div>
+                  <label style={{ color: 'var(--text-muted)' }} className="block text-xs mb-1.5">
+                    Target Asset & Chain <span style={{ color: 'var(--accent)' }}>(Particle Auto-Route)</span>
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="relative">
+                      <select
+                        className="input-dark appearance-none pr-8 text-sm py-2"
+                        value={asset}
+                        onChange={e => setAsset(e.target.value)}
+                      >
+                        {ASSETS.map(a => <option key={a}>{a}</option>)}
+                      </select>
+                      <ChevronDown size={14} style={{ color: 'var(--text-muted)', position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                    </div>
+                    <div className="relative">
+                      <select
+                        className="input-dark appearance-none pr-8 text-sm py-2"
+                        value={chain}
+                        onChange={e => setChain(e.target.value)}
+                      >
+                        {CHAINS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                      </select>
+                      <ChevronDown size={14} style={{ color: 'var(--text-muted)', position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="relative">
-                <select
-                  className="input-dark appearance-none pr-8"
-                  value={chain}
-                  onChange={e => setChain(e.target.value)}
-                >
-                  {CHAINS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-                </select>
-                <ChevronDown size={14} style={{ color: 'var(--text-muted)', position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Note */}
