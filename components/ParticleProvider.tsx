@@ -87,8 +87,12 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         const ua = new UniversalAccount({
           projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
           projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-          projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
-          ownerAddress: userAddress,
+          smartAccountOptions: {
+            projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
+            projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+            projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
+            ownerAddress: userAddress,
+          }
         });
         const result = await ua.getPrimaryAssets();
         if (result && result.assets) {
@@ -121,8 +125,12 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
           const ua = new UniversalAccount({
             projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
             projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-            projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
-            ownerAddress: address,
+            smartAccountOptions: {
+              projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
+              projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+              projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
+              ownerAddress: address,
+            }
           });
           setUaInstance(ua);
         }
@@ -157,8 +165,12 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
           ua = new UniversalAccount({
             projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
             projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-            projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
-            ownerAddress: userAddress,
+            smartAccountOptions: {
+              projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
+              projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+              projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
+              ownerAddress: userAddress,
+            }
           });
           setUaInstance(ua);
 
@@ -170,7 +182,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
                 0
               );
             }
-          } catch { }
+          } catch {}
         }
 
         const walletData = {
