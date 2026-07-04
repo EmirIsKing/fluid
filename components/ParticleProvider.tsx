@@ -1,16 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-
-let UniversalAccount: any;
-if (typeof window !== 'undefined') {
-  try {
-    const sdk = require('@particle-network/universal-account-sdk');
-    UniversalAccount = sdk.UniversalAccount;
-  } catch (e) {
-    console.error('Failed to load @particle-network/universal-account-sdk', e);
-  }
-}
+// @ts-ignore
+import { CHAIN_ID, SUPPORTED_TOKEN_TYPE, type IAssetsResponse, UniversalAccount } from "@particle-network/universal-account-sdk";
 
 export type Transaction = {
   id: string;
@@ -186,7 +178,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
                 0
               );
             }
-          } catch {}
+          } catch { }
         }
 
         const walletData = {
