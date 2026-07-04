@@ -17,8 +17,19 @@ export default function SendPage() {
   );
 }
 
-const ASSETS = ['USDC', 'USDT', 'ETH', 'MATIC', 'BNB'];
-const CHAINS = ['Polygon', 'Ethereum', 'Base', 'Arbitrum', 'BNB Chain'];
+const ASSETS = ['USDC', 'USDT', 'ETH', 'MATIC', 'BNB', 'AVAX'];
+
+// All Particle Network co-testnet supported destination chains
+const CHAINS = [
+  { label: 'Ethereum Sepolia', value: 'Ethereum Sepolia', explorer: 'https://sepolia.etherscan.io/tx' },
+  { label: 'Arbitrum Sepolia', value: 'Arbitrum Sepolia', explorer: 'https://sepolia.arbiscan.io/tx' },
+  { label: 'Base Sepolia',     value: 'Base Sepolia',     explorer: 'https://sepolia-explorer.base.org/tx' },
+  { label: 'Linea Sepolia',    value: 'Linea Sepolia',    explorer: 'https://sepolia.lineascan.build/tx' },
+  { label: 'Avalanche Fuji',   value: 'Avalanche Fuji',   explorer: 'https://testnet.snowtrace.io/tx' },
+  { label: 'BNB Testnet',      value: 'BNB Chain',        explorer: 'https://testnet.bscscan.com/tx' },
+  { label: 'Berachain bArtio', value: 'Berachain',        explorer: 'https://artio.beratrail.io/tx' },
+  { label: 'Polygon Amoy',     value: 'Polygon Amoy',     explorer: 'https://amoy.polygonscan.com/tx' },
+];
 
 function SendPageInner() {
   const searchParams = useSearchParams();
@@ -30,7 +41,7 @@ function SendPageInner() {
   const [resolvedContact, setResolvedContact] = useState<Contact | null>(null);
   const [amount, setAmount] = useState('');
   const [asset, setAsset] = useState('USDC');
-  const [chain, setChain] = useState('Polygon');
+  const [chain, setChain] = useState('Base Sepolia');
   const [note, setNote] = useState('');
   const [txHash, setTxHash] = useState('');
   const [sendStep, setSendStep] = useState(0);
@@ -42,7 +53,13 @@ function SendPageInner() {
     setResolvedContact(match);
     if (match) {
       setAsset(match.preferred.asset);
-      setChain(match.preferred.chain);
+      // Map old chain names to new Particle co-testnet names
+      const chainMap: Record<string, string> = {
+        'Polygon': 'Polygon Amoy', 'Base': 'Base Sepolia',
+        'Ethereum': 'Ethereum Sepolia', 'Arbitrum': 'Arbitrum Sepolia',
+        'BNB Chain': 'BNB Chain',
+      };
+      setChain(chainMap[match.preferred.chain] ?? match.preferred.chain);
     }
   }, [recipient, contacts]);
 
@@ -153,7 +170,7 @@ function SendPageInner() {
                   value={chain}
                   onChange={e => setChain(e.target.value)}
                 >
-                  {CHAINS.map(c => <option key={c}>{c}</option>)}
+                  {CHAINS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                 </select>
                 <ChevronDown size={14} style={{ color: 'var(--text-muted)', position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
               </div>
@@ -313,10 +330,11 @@ function SendPageInner() {
           </div>
 
           <div className="flex gap-3">
-            <a href={`https://polygonscan.com/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
+            <a href={`${CHAINS.find(c => c.value === chain)?.explorer ?? 'https://sepolia.etherscan.io/tx'}/${txHash}`}
+              target="_blank" rel="noopener noreferrer"
               style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
               className="flex-1 py-3 rounded-full font-semibold flex items-center justify-center gap-2 text-sm hover:border-[var(--accent)] transition-colors">
-              <ExternalLink size={14} /> Explorer
+              <ExternalLink size={14} /> View on Explorer
             </a>
             <button onClick={reset} className="btn-accent flex-1 py-3 text-sm">
               Send Again

@@ -129,6 +129,70 @@ async function ensureSepoliaNetwork() {
   }
 }
 
+// All Particle Network co-testnet supported chains
+const UA_SUPPORTED_CHAINS: Record<string, { chainId: number; rpc: string; name: string }> = {
+  // Ethereum
+  'ethereum sepolia': { chainId: 11155111, rpc: 'https://ethereum-sepolia-rpc.publicnode.com', name: 'Ethereum Sepolia' },
+  'ethereum': { chainId: 11155111, rpc: 'https://ethereum-sepolia-rpc.publicnode.com', name: 'Ethereum Sepolia' },
+  // Arbitrum
+  'arbitrum sepolia': { chainId: 421614, rpc: 'https://sepolia-rollup.arbitrum.io/rpc', name: 'Arbitrum Sepolia' },
+  'arbitrum': { chainId: 421614, rpc: 'https://sepolia-rollup.arbitrum.io/rpc', name: 'Arbitrum Sepolia' },
+  // Base
+  'base sepolia': { chainId: 84532, rpc: 'https://sepolia.base.org', name: 'Base Sepolia' },
+  'base': { chainId: 84532, rpc: 'https://sepolia.base.org', name: 'Base Sepolia' },
+  // Linea
+  'linea sepolia': { chainId: 59141, rpc: 'https://rpc.sepolia.linea.build', name: 'Linea Sepolia' },
+  'linea': { chainId: 59141, rpc: 'https://rpc.sepolia.linea.build', name: 'Linea Sepolia' },
+  // Avalanche
+  'avalanche fuji': { chainId: 43113, rpc: 'https://api.avax-test.network/ext/bc/C/rpc', name: 'Avalanche Fuji' },
+  'avalanche': { chainId: 43113, rpc: 'https://api.avax-test.network/ext/bc/C/rpc', name: 'Avalanche Fuji' },
+  // BNB Chain
+  'bnb chain': { chainId: 97, rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/', name: 'BNB Testnet' },
+  'bnb': { chainId: 97, rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/', name: 'BNB Testnet' },
+  // Berachain
+  'berachain': { chainId: 80084, rpc: 'https://artio.rpc.berachain.com/', name: 'Berachain bArtio' },
+  // Polygon
+  'polygon amoy': { chainId: 80002, rpc: 'https://rpc-amoy.polygon.technology', name: 'Polygon Amoy' },
+  'polygon': { chainId: 80002, rpc: 'https://rpc-amoy.polygon.technology', name: 'Polygon Amoy' },
+};
+
+const ALL_TESTNET_CHAINS = [
+  { name: 'Ethereum Sepolia', rpc: 'https://ethereum-sepolia-rpc.publicnode.com' },
+  { name: 'Arbitrum Sepolia', rpc: 'https://sepolia-rollup.arbitrum.io/rpc' },
+  { name: 'Base Sepolia',     rpc: 'https://sepolia.base.org' },
+  { name: 'Linea Sepolia',    rpc: 'https://rpc.sepolia.linea.build' },
+  { name: 'Avalanche Fuji',   rpc: 'https://api.avax-test.network/ext/bc/C/rpc' },
+  { name: 'BNB Testnet',      rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/' },
+  { name: 'Polygon Amoy',     rpc: 'https://rpc-amoy.polygon.technology' },
+];
+
+async function fetchBalanceOnChain(address: string, rpcUrl: string): Promise<number> {
+  try {
+    const res = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [address, 'latest'] }),
+    });
+    const data = await res.json();
+    if (data && data.result) return Number(BigInt(data.result)) / 1e18;
+  } catch {}
+  return 0;
+}
+
+async function fetchUniversalBalance(address: string): Promise<{ total: number; breakdown: Record<string, number> }> {
+  const breakdown: Record<string, number> = {};
+  let total = 0;
+  await Promise.all(
+    ALL_TESTNET_CHAINS.map(async c => {
+      const bal = await fetchBalanceOnChain(address, c.rpc);
+      breakdown[c.name] = bal;
+      total += bal;
+    })
+  );
+  return { total, breakdown };
+}
+
+
 export function ParticleProvider({ children }: { children: React.ReactNode }) {
   const [isConnected, setIsConnected] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
@@ -150,10 +214,11 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
   const refreshBalance = async (userAddress: string) => {
     if (!userAddress) return;
     try {
-      // Fetch MetaMask wallet balance directly from Sepolia network RPCs
-      let fetchedBalance = await fetchSepoliaBalance(userAddress);
+      // Aggregate balance across all supported testnet chains
+      const { total } = await fetchUniversalBalance(userAddress);
 
-      // Fetch UA assets if any and sum them
+      // Also try to get UA primary assets (supported chains only)
+      let uaAssetBalance = 0;
       if (UniversalAccount && process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID) {
         try {
           const ua = new UniversalAccount({
@@ -164,17 +229,14 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
           });
           const assets = await ua.getPrimaryAssets();
           if (assets && assets.length > 0) {
-            const uaBalance = assets.reduce((acc: number, asset: any) => acc + (parseFloat(asset.amount) || 0), 0);
-            fetchedBalance += uaBalance;
+            uaAssetBalance = assets.reduce((acc: number, a: any) => acc + (parseFloat(a.amount) || 0), 0);
           }
-        } catch (e) {
-          console.warn('Could not fetch real asset balances from testnet UA', e);
-        }
+        } catch { /* UA may not have assets yet */ }
       }
 
+      const fetchedBalance = total + uaAssetBalance;
       setBalance(fetchedBalance);
-      
-      // Update local storage with the new balance
+
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -199,7 +261,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         setBalance(balance);
         setActiveChains(activeChains);
 
-        // Re-initialize Universal Account using saved details
+        // Re-initialize Particle Universal Account instance
         if (UniversalAccount && process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID && address) {
           try {
             const ua = new UniversalAccount({
@@ -241,48 +303,45 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         // Ensure wallet is switched to Sepolia
         await ensureSepoliaNetwork();
 
+        // Simulate EIP-7702 upgrade flow delay
+        await new Promise(resolve => setTimeout(resolve, 2500));
+
+        // Aggregate balance across all supported testnet chains
+        const { total: nativeBalance } = await fetchUniversalBalance(userAddress);
+        const chainsList = ALL_TESTNET_CHAINS.map(c => c.name);
+
+        // Initialize Particle Universal Account
+        let ua: any = null;
+        let uaBalance = 0;
         if (UniversalAccount && process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID) {
-          // Instantiate actual Universal Account using project credentials
-          const ua = new UniversalAccount({
-            projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
-            projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-            projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
-            ownerAddress: userAddress,
-          });
-          setUaInstance(ua);
-
-          // Simulate EIP-7702 upgrade flow delay
-          await new Promise(resolve => setTimeout(resolve, 2500));
-
-          // Fetch MetaMask wallet balance directly from Sepolia network RPCs
-          let fetchedBalance = await fetchSepoliaBalance(userAddress);
-          let chainsList = ['Ethereum Sepolia', 'Base Sepolia', 'Polygon Amoy'];
-
-          // Fetch UA assets if any and sum them
           try {
+            ua = new UniversalAccount({
+              projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
+              projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+              projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
+              ownerAddress: userAddress,
+            });
+            setUaInstance(ua);
             const assets = await ua.getPrimaryAssets();
             if (assets && assets.length > 0) {
-              const uaBalance = assets.reduce((acc: number, asset: any) => acc + (parseFloat(asset.amount) || 0), 0);
-              fetchedBalance += uaBalance;
+              uaBalance = assets.reduce((acc: number, a: any) => acc + (parseFloat(a.amount) || 0), 0);
             }
-          } catch (e) {
-            console.warn('Could not fetch real asset balances from testnet UA', e);
-          }
-
-          const walletData = {
-            address: userAddress,
-            balance: fetchedBalance,
-            activeChains: chainsList,
-          };
-
-          setIsConnected(true);
-          setAddress(walletData.address);
-          setBalance(walletData.balance);
-          setActiveChains(walletData.activeChains);
-          setIsUpgrading(false);
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(walletData));
-          return;
+          } catch { /* UA may not have indexed assets yet */ }
         }
+
+        const walletData = {
+          address: userAddress,
+          balance: nativeBalance + uaBalance,
+          activeChains: chainsList,
+        };
+
+        setIsConnected(true);
+        setAddress(walletData.address);
+        setBalance(walletData.balance);
+        setActiveChains(walletData.activeChains);
+        setIsUpgrading(false);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(walletData));
+        return;
       } catch (e) {
         console.error('MetaMask/UniversalAccount connection failed', e);
         setIsUpgrading(false);
@@ -306,9 +365,6 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
 
   const sendPayment = async (to: string, amount: number, asset: string, chain: string, note?: string): Promise<string> => {
     if (typeof window !== 'undefined' && (window as any).ethereum && address) {
-      // Ensure wallet is switched to Sepolia
-      await ensureSepoliaNetwork();
-
       // Resolve recipient address
       let recipientAddress = to;
       const resolved = resolveRecipient(to, contacts);
@@ -318,49 +374,43 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
 
       // Check if the address is a mock one (like '0xBob123...')
       if (!recipientAddress.startsWith('0x') || recipientAddress.includes('.')) {
-        // Default to a standard valid Sepolia test recipient address so the transaction is valid
         recipientAddress = '0x9965507B1a0595C5411CC4457ED061b402C82F24';
       }
 
-      // If we have an active Particle Universal Account instance, try to do a real Particle convert/swap transaction
-      if (uaInstance) {
-        try {
-          console.log('Attempting real on-chain conversion transaction via Particle Universal Account...');
-          
-          // Map chain names to Particle supported chain IDs
-          let targetChainId = 11155111; // Sepolia default
-          if (chain.toLowerCase().includes('polygon')) {
-            targetChainId = 80002; // Polygon Amoy Testnet
-          } else if (chain.toLowerCase().includes('base')) {
-            targetChainId = 84532; // Base Sepolia Testnet
-          }
+      // Try Particle Universal Account cross-chain convert transaction
+      // UA v2 supports: Base Sepolia (84532), Polygon Amoy (80002), and mainnets
+      const chainKey = chain.toLowerCase();
+      const targetChainInfo = UA_SUPPORTED_CHAINS[chainKey];
 
-          // Build convert transaction using Particle SDK
+      if (uaInstance && targetChainInfo) {
+        try {
+          console.log(`[Particle UA] Creating cross-chain convert transaction → ${targetChainInfo.name}`);
+
           const transaction = await uaInstance.createConvertTransaction({
             expectToken: {
-              type: asset.toUpperCase(), // USDC, USDT, ETH
+              type: asset.toUpperCase(),
               amount: amount.toString(),
             },
-            chainId: targetChainId,
+            chainId: targetChainInfo.chainId,
           });
 
-          // Sign the generated transaction's rootHash via MetaMask
+          // Sign the rootHash using MetaMask personal_sign
           const signature = await (window as any).ethereum.request({
             method: 'personal_sign',
             params: [transaction.rootHash, address],
           });
 
-          // Broadcast conversion transaction to the blockchain
+          // Broadcast via Particle
           const result = await uaInstance.sendTransaction(transaction, signature);
           const txHash = result.transactionId;
-          console.log('Particle swap transaction successful on-chain!', txHash);
+          console.log('[Particle UA] Cross-chain swap submitted!', txHash);
 
           const newTx: Transaction = {
             id: 'tx' + Date.now(),
             type: 'sent',
             amount,
             asset,
-            chain,
+            chain: targetChainInfo.name,
             toName: resolved ? resolved.name : to.substring(0, 8),
             to: recipientAddress,
             date: 'Just now',
@@ -369,29 +419,23 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
           };
 
           setTransactions(prev => [newTx, ...prev]);
-          setTimeout(() => refreshBalance(address), 5000);
+          setTimeout(() => refreshBalance(address), 8000);
           return txHash;
-        } catch (err) {
-          console.warn('Particle on-chain swap failed/unsupported on testnet. Falling back to direct MetaMask Sepolia transfer.', err);
+        } catch (err: any) {
+          console.warn('[Particle UA] Cross-chain swap failed, falling back to direct MetaMask transfer:', err?.message || err);
         }
       }
 
-      // Fallback: Direct MetaMask transfer (Sepolia ETH)
+      // Fallback: direct MetaMask Sepolia ETH transfer
+      // Switch to Sepolia before sending
+      await ensureSepoliaNetwork();
       try {
-        // Convert the amount in float (ETH) to hex Wei
         const amountInWei = BigInt(Math.floor(amount * 1e18));
         const valueHex = '0x' + amountInWei.toString(16);
 
-        // Request MetaMask to send the transaction
         const txHash = await (window as any).ethereum.request({
           method: 'eth_sendTransaction',
-          params: [
-            {
-              from: address,
-              to: recipientAddress,
-              value: valueHex,
-            },
-          ],
+          params: [{ from: address, to: recipientAddress, value: valueHex }],
         });
 
         const newTx: Transaction = {
@@ -408,10 +452,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         };
 
         setTransactions(prev => [newTx, ...prev]);
-        
-        // Refresh balance after the transaction gets mined
         setTimeout(() => refreshBalance(address), 5000);
-
         return txHash;
       } catch (error) {
         console.error('Failed to send transaction via MetaMask:', error);
