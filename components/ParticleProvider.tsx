@@ -4,6 +4,9 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 // @ts-ignore
 import { CHAIN_ID, SUPPORTED_TOKEN_TYPE, type IAssetsResponse, UniversalAccount } from "@particle-network/universal-account-sdk";
 
+// Particle Network RPC — routes all UA calls through Particle's infrastructure
+const PARTICLE_RPC_URL = `https://rpc.particle.network/evm-chain?chainId=11155111&projectUuid=${process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID}&projectKey=${process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY}`;
+
 export type Transaction = {
   id: string;
   type: 'sent' | 'received';
@@ -87,6 +90,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         const ua = new UniversalAccount({
           projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
           projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+          rpcUrl: PARTICLE_RPC_URL,
           smartAccountOptions: {
             projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
             projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
@@ -125,6 +129,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
           const ua = new UniversalAccount({
             projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
             projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+            rpcUrl: PARTICLE_RPC_URL,
             smartAccountOptions: {
               projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
               projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
@@ -165,6 +170,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
           ua = new UniversalAccount({
             projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
             projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+            rpcUrl: PARTICLE_RPC_URL,
             smartAccountOptions: {
               projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
               projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
