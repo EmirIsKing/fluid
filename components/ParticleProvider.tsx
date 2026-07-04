@@ -338,7 +338,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
 
           const transaction = await uaInstance.createConvertTransaction({
             expectToken: {
-              type: asset.toUpperCase(),
+              type: asset.toLowerCase(),
               amount: amount.toString(),
             },
             chainId: targetChainInfo.chainId,
