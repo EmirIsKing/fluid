@@ -17,6 +17,38 @@ if (typeof window !== 'undefined') {
         }
       });
     }
+
+    // Inject testnet token configurations so getSupportedToken() successfully resolves them
+    if (sdk.SUPPORTED_PRIMARY_TOKENS) {
+      const testnetTokens = [
+        // Base Sepolia (84532)
+        { assetId: 'eth', type: 'eth', chainId: 84532, address: '0x0000000000000000000000000000000000000000', decimals: 18, realDecimals: 18, isMultiChain: true, isMultiChainDefault: false },
+        { assetId: 'usdc', type: 'usdc', chainId: 84532, address: '0x03c6b3f930c25f414570d187214742a0b165b4c1', decimals: 18, realDecimals: 6, isMultiChain: true, isMultiChainDefault: false },
+        { assetId: 'usdt', type: 'usdt', chainId: 84532, address: '0x0000000000000000000000000000000000000000', decimals: 18, realDecimals: 6, isMultiChain: true, isMultiChainDefault: false },
+        
+        // Arbitrum Sepolia (421614)
+        { assetId: 'eth', type: 'eth', chainId: 421614, address: '0x0000000000000000000000000000000000000000', decimals: 18, realDecimals: 18, isMultiChain: true, isMultiChainDefault: false },
+        { assetId: 'usdc', type: 'usdc', chainId: 421614, address: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d', decimals: 18, realDecimals: 6, isMultiChain: true, isMultiChainDefault: false },
+        
+        // Polygon Amoy (80002)
+        { assetId: 'matic', type: 'matic', chainId: 80002, address: '0x0000000000000000000000000000000000000000', decimals: 18, realDecimals: 18, isMultiChain: true, isMultiChainDefault: false },
+        { assetId: 'usdc', type: 'usdc', chainId: 80002, address: '0x41e94eb25b4c1852d4857ec9027593d49521d8f2', decimals: 18, realDecimals: 6, isMultiChain: true, isMultiChainDefault: false },
+
+        // Monad Testnet (10143)
+        { assetId: 'mon', type: 'mon', chainId: 10143, address: '0x0000000000000000000000000000000000000000', decimals: 18, realDecimals: 18, isMultiChain: true, isMultiChainDefault: false },
+        { assetId: 'eth', type: 'eth', chainId: 10143, address: '0x0000000000000000000000000000000000000000', decimals: 18, realDecimals: 18, isMultiChain: true, isMultiChainDefault: false },
+        { assetId: 'usdc', type: 'usdc', chainId: 10143, address: '0xf817257fed0c2ef0f4077884d08c62c3c6f491c1', decimals: 18, realDecimals: 6, isMultiChain: true, isMultiChainDefault: false }
+      ];
+
+      testnetTokens.forEach(token => {
+        const exists = sdk.SUPPORTED_PRIMARY_TOKENS.some(
+          (t: any) => t.type === token.type && t.chainId === token.chainId
+        );
+        if (!exists) {
+          sdk.SUPPORTED_PRIMARY_TOKENS.push(token);
+        }
+      });
+    }
   } catch (e) {
     console.error('Failed to load @particle-network/universal-account-sdk', e);
   }
@@ -84,39 +116,39 @@ const MOCK_TRANSACTIONS: Transaction[] = [
 const UA_SUPPORTED_CHAINS: Record<string, { chainId: number; rpc: string; name: string }> = {
   // Testnets
   'monad testnet': { chainId: 10143, rpc: 'https://testnet-rpc.monad.xyz', name: 'Monad Testnet' },
-  'monad':         { chainId: 10143, rpc: 'https://testnet-rpc.monad.xyz', name: 'Monad Testnet' },
-  'base sepolia':  { chainId: 84532, rpc: 'https://sepolia.base.org', name: 'Base Sepolia' },
+  'monad': { chainId: 10143, rpc: 'https://testnet-rpc.monad.xyz', name: 'Monad Testnet' },
+  'base sepolia': { chainId: 84532, rpc: 'https://sepolia.base.org', name: 'Base Sepolia' },
   'arbitrum sepolia': { chainId: 421614, rpc: 'https://sepolia-rollup.arbitrum.io/rpc', name: 'Arbitrum Sepolia' },
   'linea sepolia': { chainId: 59141, rpc: 'https://rpc.sepolia.linea.build', name: 'Linea Sepolia' },
   'avalanche fuji': { chainId: 43113, rpc: 'https://api.avax-test.network/ext/bc/C/rpc', name: 'Avalanche Fuji' },
-  'bnb testnet':   { chainId: 97, rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/', name: 'BNB Testnet' },
-  'berachain':     { chainId: 80084, rpc: 'https://artio.rpc.berachain.com/', name: 'Berachain bArtio' },
-  'taiko hekla':   { chainId: 167009, rpc: 'https://rpc.hekla.taiko.xyz', name: 'Taiko Hekla' },
+  'bnb testnet': { chainId: 97, rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/', name: 'BNB Testnet' },
+  'berachain': { chainId: 80084, rpc: 'https://artio.rpc.berachain.com/', name: 'Berachain bArtio' },
+  'taiko hekla': { chainId: 167009, rpc: 'https://rpc.hekla.taiko.xyz', name: 'Taiko Hekla' },
   'zircuit testnet': { chainId: 48899, rpc: 'https://zircuit1-testnet.p2pify.com', name: 'Zircuit Testnet' },
-  'polygon amoy':  { chainId: 80002, rpc: 'https://rpc-amoy.polygon.technology', name: 'Polygon Amoy' },
-  
+  'polygon amoy': { chainId: 80002, rpc: 'https://rpc-amoy.polygon.technology', name: 'Polygon Amoy' },
+
   // Mainnets (Fallback mappings)
-  'ethereum':   { chainId: 1,     rpc: 'https://eth.llamarpc.com',            name: 'Ethereum' },
-  'base':       { chainId: 8453,  rpc: 'https://mainnet.base.org',             name: 'Base' },
-  'arbitrum':   { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc',         name: 'Arbitrum One' },
-  'arbitrum one': { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc',       name: 'Arbitrum One' },
-  'bnb':        { chainId: 56,    rpc: 'https://bsc-dataseed.binance.org/',     name: 'BNB Chain' },
-  'bnb chain':  { chainId: 56,    rpc: 'https://bsc-dataseed.binance.org/',     name: 'BNB Chain' },
-  'x layer':    { chainId: 196,   rpc: 'https://rpc.xlayer.tech',              name: 'X Layer' },
+  'ethereum': { chainId: 1, rpc: 'https://eth.llamarpc.com', name: 'Ethereum' },
+  'base': { chainId: 8453, rpc: 'https://mainnet.base.org', name: 'Base' },
+  'arbitrum': { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc', name: 'Arbitrum One' },
+  'arbitrum one': { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc', name: 'Arbitrum One' },
+  'bnb': { chainId: 56, rpc: 'https://bsc-dataseed.binance.org/', name: 'BNB Chain' },
+  'bnb chain': { chainId: 56, rpc: 'https://bsc-dataseed.binance.org/', name: 'BNB Chain' },
+  'x layer': { chainId: 196, rpc: 'https://rpc.xlayer.tech', name: 'X Layer' },
 };
 
 // Chains to scan for native token balance (any testnet/mainnet the user may hold assets on)
 const ALL_TESTNET_CHAINS = [
-  { name: 'Monad Testnet',    rpc: 'https://testnet-rpc.monad.xyz' },
+  { name: 'Monad Testnet', rpc: 'https://testnet-rpc.monad.xyz' },
   { name: 'Arbitrum Sepolia', rpc: 'https://sepolia-rollup.arbitrum.io/rpc' },
-  { name: 'Base Sepolia',     rpc: 'https://sepolia.base.org' },
-  { name: 'Linea Sepolia',    rpc: 'https://rpc.sepolia.linea.build' },
-  { name: 'Avalanche Fuji',   rpc: 'https://api.avax-test.network/ext/bc/C/rpc' },
-  { name: 'BNB Testnet',      rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/' },
+  { name: 'Base Sepolia', rpc: 'https://sepolia.base.org' },
+  { name: 'Linea Sepolia', rpc: 'https://rpc.sepolia.linea.build' },
+  { name: 'Avalanche Fuji', rpc: 'https://api.avax-test.network/ext/bc/C/rpc' },
+  { name: 'BNB Testnet', rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/' },
   { name: 'Berachain bArtio', rpc: 'https://artio.rpc.berachain.com/' },
-  { name: 'Taiko Hekla',      rpc: 'https://rpc.hekla.taiko.xyz' },
-  { name: 'Zircuit Testnet',  rpc: 'https://zircuit1-testnet.p2pify.com' },
-  { name: 'Polygon Amoy',     rpc: 'https://rpc-amoy.polygon.technology' },
+  { name: 'Taiko Hekla', rpc: 'https://rpc.hekla.taiko.xyz' },
+  { name: 'Zircuit Testnet', rpc: 'https://zircuit1-testnet.p2pify.com' },
+  { name: 'Polygon Amoy', rpc: 'https://rpc-amoy.polygon.technology' },
 ];
 
 async function fetchBalanceOnChain(address: string, rpcUrl: string): Promise<number> {
@@ -128,7 +160,7 @@ async function fetchBalanceOnChain(address: string, rpcUrl: string): Promise<num
     });
     const data = await res.json();
     if (data && data.result) return Number(BigInt(data.result)) / 1e18;
-  } catch {}
+  } catch { }
   return 0;
 }
 
@@ -229,7 +261,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
           }
         }
       }
-    } catch {} finally {
+    } catch { } finally {
       setIsInitializing(false);
     }
   }, []);
@@ -332,9 +364,12 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       const chainKey = chain.toLowerCase();
       const targetChainInfo = UA_SUPPORTED_CHAINS[chainKey];
 
+      console.log(`[Particle UA] Creating cross-chain convert transaction → ${targetChainInfo.chainId} - ${asset.toLowerCase()}`);
+
+
       if (uaInstance && targetChainInfo) {
         try {
-          console.log(`[Particle UA] Creating cross-chain convert transaction → ${targetChainInfo.name}`);
+          console.log(`[Particle UA] Creating cross-chain convert transaction → ${targetChainInfo.chainId} - ${asset.toLowerCase()}`);
 
           const transaction = await uaInstance.createConvertTransaction({
             expectToken: {
@@ -343,6 +378,8 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
             },
             chainId: targetChainInfo.chainId,
           });
+
+          console.log(transaction);
 
           // Sign the rootHash using MetaMask personal_sign
           const signature = await (window as any).ethereum.request({
