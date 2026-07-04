@@ -61,16 +61,8 @@ const MOCK_TRANSACTIONS: Transaction[] = [
   { id: 'tx2', type: 'received', amount: 120, asset: 'ETH', chain: 'Base', fromName: 'Alice', date: 'Yesterday, 11:00 AM', status: 'completed', txHash: '0xdef...' },
   { id: 'tx3', type: 'sent', amount: 25, asset: 'USDT', chain: 'Arbitrum', toName: 'Carol', date: 'Jul 29, 4:20 PM', status: 'completed', txHash: '0xghi...' },
 ];
-
-const UA_SUPPORTED_CHAINS: Record<string, { chainId: number; name: string }> = {
-  'ethereum': { chainId: 1, name: 'Ethereum' },
-  'base': { chainId: 8453, name: 'Base' },
-  'arbitrum': { chainId: 42161, name: 'Arbitrum One' },
-  'bnb': { chainId: 56, name: 'BNB Chain' },
-  'x layer': { chainId: 196, name: 'X Layer' }
-};
-
 export function ParticleProvider({ children }: { children: React.ReactNode }) {
+
   const [isConnected, setIsConnected] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState(0);
@@ -226,17 +218,44 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         recipientAddress = '0x9965507B1a0595C5411CC4457ED061b402C82F24';
       }
 
-      const chainKey = chain.toLowerCase();
-      const targetChainInfo = UA_SUPPORTED_CHAINS[chainKey] || { chainId: 8453, name: 'Base' };
+      let targetChainId = CHAIN_ID.BASE_MAINNET;
+      let targetChainName = 'Base';
+      let tokenAddress = '0x0000000000000000000000000000000000000000'; // Default native (Base ETH)
+
+      const chainLower = chain.toLowerCase();
+      if (chainLower.includes('ether')) {
+        targetChainId = CHAIN_ID.ETHEREUM_MAINNET;
+        targetChainName = 'Ethereum';
+        // If sending USDC on Ethereum Mainnet
+        if (asset.toUpperCase() === 'USDC') tokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
+        else if (asset.toUpperCase() === 'USDT') tokenAddress = '0xdAC17F958D2ee523a2206206994597C13D831ec7';
+      } else if (chainLower.includes('arbitrum')) {
+        targetChainId = CHAIN_ID.ARBITRUM_MAINNET_ONE;
+        targetChainName = 'Arbitrum One';
+        if (asset.toUpperCase() === 'USDC') tokenAddress = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
+        else if (asset.toUpperCase() === 'USDT') tokenAddress = '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9';
+      } else if (chainLower.includes('bnb') || chainLower.includes('bsc')) {
+        targetChainId = CHAIN_ID.BSC_MAINNET;
+        targetChainName = 'BNB Chain';
+        if (asset.toUpperCase() === 'USDC') tokenAddress = '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d';
+        else if (asset.toUpperCase() === 'USDT') tokenAddress = '0x55d398326f99059fF775485246999027B3197955';
+      } else if (chainLower.includes('x layer') || chainLower.includes('xlayer')) {
+        targetChainId = CHAIN_ID.XLAYER_MAINNET;
+        targetChainName = 'X Layer';
+      } else {
+        // Base mainnet
+        if (asset.toUpperCase() === 'USDC') tokenAddress = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+      }
 
       if (uaInstance) {
         try {
-          const transaction = await uaInstance.createConvertTransaction({
-            expectToken: {
-              type: asset.toLowerCase(),
-              amount: amount.toString(),
+          const transaction = await uaInstance.createTransferTransaction({
+            token: {
+              chainId: targetChainId,
+              address: tokenAddress,
             },
-            chainId: targetChainInfo.chainId,
+            amount: amount.toString(),
+            receiver: recipientAddress,
           });
 
           const signature = await (window as any).ethereum.request({
@@ -252,7 +271,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
             type: 'sent',
             amount,
             asset,
-            chain: targetChainInfo.name,
+            chain: targetChainName,
             toName: resolved ? resolved.name : to.substring(0, 8),
             to: recipientAddress,
             date: 'Just now',
@@ -264,8 +283,8 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
           setTimeout(() => refreshBalance(address), 8000);
           return txHash;
         } catch (err: any) {
-          console.error('[Particle UA] Cross-chain convert transaction failed:', err);
-          throw new Error(err.message || 'Cross-chain swap failed');
+          console.error('[Particle UA] Transfer transaction failed:', err);
+          throw new Error(err.message || 'Transfer failed');
         }
       }
       throw new Error('Universal Account instance is not initialized.');
