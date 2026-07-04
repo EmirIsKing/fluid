@@ -70,65 +70,6 @@ const MOCK_TRANSACTIONS: Transaction[] = [
   { id: 'tx3', type: 'sent', amount: 25, asset: 'USDT', chain: 'Arbitrum', toName: 'Carol', date: 'Jul 29, 4:20 PM', status: 'completed', txHash: '0xghi...' },
 ];
 
-async function fetchSepoliaBalance(userAddress: string): Promise<number> {
-  const rpcs = [
-    'https://ethereum-sepolia-rpc.publicnode.com',
-    'https://rpc.ankr.com/eth_sepolia',
-    'https://sepolia.gateway.tenderly.co'
-  ];
-  for (const rpcUrl of rpcs) {
-    try {
-      const response = await fetch(rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'eth_getBalance',
-          params: [userAddress, 'latest']
-        })
-      });
-      const data = await response.json();
-      if (data && data.result) {
-        return Number(BigInt(data.result)) / 1e18;
-      }
-    } catch (e) {
-      console.warn(`Failed to fetch Sepolia balance from RPC ${rpcUrl}:`, e);
-    }
-  }
-  return 0;
-}
-
-async function ensureSepoliaNetwork() {
-  if (typeof window !== 'undefined' && (window as any).ethereum) {
-    try {
-      await (window as any).ethereum.request({
-        method: 'wallet_switchEthereumChain',
-        params: [{ chainId: '0xaa36a7' }], // 11155111 Sepolia
-      });
-    } catch (switchError: any) {
-      if (switchError.code === 4902) {
-        try {
-          await (window as any).ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [
-              {
-                chainId: '0xaa36a7',
-                chainName: 'Ethereum Sepolia Testnet',
-                nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
-                rpcUrls: ['https://ethereum-sepolia-rpc.publicnode.com'],
-                blockExplorerUrls: ['https://sepolia.etherscan.io'],
-              },
-            ],
-          });
-        } catch (addError) {
-          console.error('Failed to add Sepolia network:', addError);
-        }
-      }
-    }
-  }
-}
-
 // All Particle Network co-testnet supported chains for routing
 const UA_SUPPORTED_CHAINS: Record<string, { chainId: number; rpc: string; name: string }> = {
   // Arbitrum
@@ -432,9 +373,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // Fallback: direct MetaMask Sepolia ETH transfer
-      // Switch to Sepolia before sending
-      await ensureSepoliaNetwork();
+      // Fallback: direct MetaMask native transfer on the user's current network
       try {
         const amountInWei = BigInt(Math.floor(amount * 1e18));
         const valueHex = '0x' + amountInWei.toString(16);
