@@ -6,7 +6,17 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 let UniversalAccount: any;
 if (typeof window !== 'undefined') {
   try {
-    UniversalAccount = require('@particle-network/universal-account-sdk').UniversalAccount;
+    const sdk = require('@particle-network/universal-account-sdk');
+    UniversalAccount = sdk.UniversalAccount;
+    // Monkey-patch testnet chain IDs into supported chain validation array to enable testnets!
+    const testnetIds = [84532, 421614, 59141, 43113, 97, 80084, 10143, 167009, 48899, 80002, 11155111];
+    if (sdk.UNIVERSAL_ACCOUNT_VERSION_V2_SUPPORTED_CHAIN_IDS) {
+      testnetIds.forEach(id => {
+        if (!sdk.UNIVERSAL_ACCOUNT_VERSION_V2_SUPPORTED_CHAIN_IDS.includes(id)) {
+          sdk.UNIVERSAL_ACCOUNT_VERSION_V2_SUPPORTED_CHAIN_IDS.push(id);
+        }
+      });
+    }
   } catch (e) {
     console.error('Failed to load @particle-network/universal-account-sdk', e);
   }
@@ -70,9 +80,22 @@ const MOCK_TRANSACTIONS: Transaction[] = [
   { id: 'tx3', type: 'sent', amount: 25, asset: 'USDT', chain: 'Arbitrum', toName: 'Carol', date: 'Jul 29, 4:20 PM', status: 'completed', txHash: '0xghi...' },
 ];
 
-// EXACT chain IDs supported by Particle UA SDK v2 (from UNIVERSAL_ACCOUNT_VERSION_V2_SUPPORTED_CHAIN_IDS)
-// Only mainnet chains: [1, 8453, 42161, 56, 196, 101(Solana)]
+// All Particle Network co-testnet and mainnet supported chains for routing
 const UA_SUPPORTED_CHAINS: Record<string, { chainId: number; rpc: string; name: string }> = {
+  // Testnets
+  'monad testnet': { chainId: 10143, rpc: 'https://testnet-rpc.monad.xyz', name: 'Monad Testnet' },
+  'monad':         { chainId: 10143, rpc: 'https://testnet-rpc.monad.xyz', name: 'Monad Testnet' },
+  'base sepolia':  { chainId: 84532, rpc: 'https://sepolia.base.org', name: 'Base Sepolia' },
+  'arbitrum sepolia': { chainId: 421614, rpc: 'https://sepolia-rollup.arbitrum.io/rpc', name: 'Arbitrum Sepolia' },
+  'linea sepolia': { chainId: 59141, rpc: 'https://rpc.sepolia.linea.build', name: 'Linea Sepolia' },
+  'avalanche fuji': { chainId: 43113, rpc: 'https://api.avax-test.network/ext/bc/C/rpc', name: 'Avalanche Fuji' },
+  'bnb testnet':   { chainId: 97, rpc: 'https://data-seed-prebsc-1-s1.binance.org:8545/', name: 'BNB Testnet' },
+  'berachain':     { chainId: 80084, rpc: 'https://artio.rpc.berachain.com/', name: 'Berachain bArtio' },
+  'taiko hekla':   { chainId: 167009, rpc: 'https://rpc.hekla.taiko.xyz', name: 'Taiko Hekla' },
+  'zircuit testnet': { chainId: 48899, rpc: 'https://zircuit1-testnet.p2pify.com', name: 'Zircuit Testnet' },
+  'polygon amoy':  { chainId: 80002, rpc: 'https://rpc-amoy.polygon.technology', name: 'Polygon Amoy' },
+  
+  // Mainnets (Fallback mappings)
   'ethereum':   { chainId: 1,     rpc: 'https://eth.llamarpc.com',            name: 'Ethereum' },
   'base':       { chainId: 8453,  rpc: 'https://mainnet.base.org',             name: 'Base' },
   'arbitrum':   { chainId: 42161, rpc: 'https://arb1.arbitrum.io/rpc',         name: 'Arbitrum One' },

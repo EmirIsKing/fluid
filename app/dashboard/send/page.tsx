@@ -17,16 +17,20 @@ export default function SendPage() {
   );
 }
 
-const ASSETS = ['USDC', 'USDT', 'ETH', 'BNB'];
+const ASSETS = ['USDC', 'USDT', 'ETH', 'MATIC', 'BNB', 'AVAX', 'MON'];
 
-// Particle Universal Account SDK v2 supported destination chains (mainnet only)
-// Source: UNIVERSAL_ACCOUNT_VERSION_V2_SUPPORTED_CHAIN_IDS = [1, 8453, 42161, 56, 196]
+// All Particle Network co-testnet supported destination chains
 const CHAINS = [
-  { label: 'Ethereum',     value: 'Ethereum',     explorer: 'https://etherscan.io/tx' },
-  { label: 'Base',         value: 'Base',         explorer: 'https://basescan.org/tx' },
-  { label: 'Arbitrum One', value: 'Arbitrum One', explorer: 'https://arbiscan.io/tx' },
-  { label: 'BNB Chain',    value: 'BNB Chain',    explorer: 'https://bscscan.com/tx' },
-  { label: 'X Layer',      value: 'X Layer',      explorer: 'https://www.oklink.com/xlayer/tx' },
+  { label: 'Monad Testnet',    value: 'Monad Testnet',    explorer: 'https://testnet.monadexplorer.com/tx' },
+  { label: 'Arbitrum Sepolia', value: 'Arbitrum Sepolia', explorer: 'https://sepolia.arbiscan.io/tx' },
+  { label: 'Base Sepolia',     value: 'Base Sepolia',     explorer: 'https://sepolia-explorer.base.org/tx' },
+  { label: 'Linea Sepolia',    value: 'Linea Sepolia',    explorer: 'https://sepolia.lineascan.build/tx' },
+  { label: 'Avalanche Fuji',   value: 'Avalanche Fuji',   explorer: 'https://testnet.snowtrace.io/tx' },
+  { label: 'BNB Testnet',      value: 'BNB Chain',        explorer: 'https://testnet.bscscan.com/tx' },
+  { label: 'Berachain bArtio', value: 'Berachain',        explorer: 'https://artio.beratrail.io/tx' },
+  { label: 'Taiko Hekla',      value: 'Taiko Hekla',      explorer: 'https://hekla.taikoscan.io/tx' },
+  { label: 'Zircuit Testnet',  value: 'Zircuit',          explorer: 'https://explorer.testnet.zircuit.com/tx' },
+  { label: 'Polygon Amoy',     value: 'Polygon Amoy',     explorer: 'https://amoy.polygonscan.com/tx' },
 ];
 
 function SendPageInner() {
@@ -39,7 +43,7 @@ function SendPageInner() {
   const [resolvedContact, setResolvedContact] = useState<Contact | null>(null);
   const [amount, setAmount] = useState('');
   const [asset, setAsset] = useState('USDC');
-  const [chain, setChain] = useState('Base');
+  const [chain, setChain] = useState('Monad Testnet');
   const [note, setNote] = useState('');
   const [txHash, setTxHash] = useState('');
   const [sendStep, setSendStep] = useState(0);
@@ -51,12 +55,12 @@ function SendPageInner() {
     setResolvedContact(match);
     if (match) {
       setAsset(match.preferred.asset);
-      // Map old chain names to new Particle UA mainnet names
+      // Map old chain names to new Particle UA testnet names
       const chainMap: Record<string, string> = {
-        'Polygon': 'Base', // Fallback to Base as Polygon testnet is removed
-        'Base': 'Base',
-        'Ethereum': 'Ethereum',
-        'Arbitrum': 'Arbitrum One',
+        'Polygon': 'Polygon Amoy',
+        'Base': 'Base Sepolia',
+        'Ethereum': 'Base Sepolia', // Redundant Sepolia fallback removed, direct to Base Sepolia
+        'Arbitrum': 'Arbitrum Sepolia',
         'BNB Chain': 'BNB Chain',
       };
       setChain(chainMap[match.preferred.chain] ?? match.preferred.chain);
