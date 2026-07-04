@@ -4,7 +4,6 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 // @ts-ignore
 import { CHAIN_ID, SUPPORTED_TOKEN_TYPE, type IAssetsResponse, UniversalAccount } from "@particle-network/universal-account-sdk";
 
-
 export type Transaction = {
   id: string;
   type: 'sent' | 'received';
@@ -183,7 +182,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
                 0
               );
             }
-          } catch {}
+          } catch { }
         }
 
         const walletData = {
