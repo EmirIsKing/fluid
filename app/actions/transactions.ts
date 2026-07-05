@@ -2,6 +2,7 @@
 
 import {
   getUserTransactions,
+  getUserByWalletAddress,
   createTransaction as dbCreateTransaction,
   updateTransactionStatus as dbUpdateTransactionStatus,
 } from '@/server/db';
@@ -47,5 +48,39 @@ export async function updateTransactionStatus(
   } catch (error) {
     console.error('[Transactions] Failed to update transaction:', error);
     return { success: false, error: 'Failed to update transaction status' };
+  }
+}
+
+/** Persist a send when the wallet address matches a stored user (best-effort). */
+export async function recordSendByWallet(data: {
+  senderAddress: string;
+  recipientAddress: string;
+  token: string;
+  amount: string;
+  sourceChain: string;
+  destinationChain: string;
+  transactionHash: string;
+  note?: string;
+}) {
+  try {
+    const user = await getUserByWalletAddress(data.senderAddress);
+    if (!user) return { success: false, skipped: true };
+
+    await dbCreateTransaction({
+      userId: user.id,
+      senderAddress: data.senderAddress,
+      recipientAddress: data.recipientAddress,
+      token: data.token,
+      amount: data.amount,
+      sourceChain: data.sourceChain,
+      destinationChain: data.destinationChain,
+      status: 'confirmed',
+      transactionHash: data.transactionHash,
+      note: data.note,
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('[Transactions] Failed to record wallet send:', error);
+    return { success: false, error: 'Failed to record transaction' };
   }
 }

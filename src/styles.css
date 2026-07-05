@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: oklch(0.985 0.004 95);
+    --foreground: oklch(0.19 0.02 255);
+    --primary: oklch(0.22 0.03 255);
+    --primary-foreground: oklch(0.985 0.004 95);
+    --accent: oklch(0.62 0.14 165);
+    --accent-hover: oklch(0.55 0.13 165);
+    --accent-dim: oklch(0.62 0.14 165 / 0.1);
+    
+    --card: oklch(0.97 0.003 95);
+    --card-foreground: oklch(0.19 0.02 255);
+    --muted: oklch(0.6 0.01 255);
+    --muted-foreground: oklch(0.45 0.01 255);
+    --border: oklch(0.88 0.01 255);
+    --border-hover: oklch(0.78 0.01 255);
+    --radius: 0.875rem;
+    
+    --grid-color: oklch(0.19 0.02 255 / 0.06);
+    --shadow-color: oklch(0.19 0.02 255 / 0.05);
+    --glow-color: oklch(0.62 0.14 165 / 0.15);
+    
+    --font-display: 'Instrument Serif', Georgia, serif;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  .dark {
+    --background: oklch(0.16 0.015 255);
+    --foreground: oklch(0.985 0.004 95);
+    --primary: oklch(0.85 0.02 255);
+    --primary-foreground: oklch(0.16 0.015 255);
+    --accent: oklch(0.68 0.16 165);
+    --accent-hover: oklch(0.72 0.18 165);
+    --accent-dim: oklch(0.68 0.16 165 / 0.15);
+    
+    --card: oklch(0.18 0.015 255);
+    --card-foreground: oklch(0.985 0.004 95);
+    --muted: oklch(0.4 0.01 255);
+    --muted-foreground: oklch(0.65 0.01 255);
+    --border: oklch(0.24 0.02 255);
+    --border-hover: oklch(0.32 0.02 255);
+    
+    --grid-color: oklch(0.985 0.004 95 / 0.06);
+    --shadow-color: oklch(0.05 0.01 255 / 0.4);
+    --glow-color: oklch(0.68 0.16 165 / 0.25);
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .font-serif {
+    font-family: var(--font-display);
+  }
+
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+/* Custom Utilities */
+.grid-paper {
+  background-size: 24px 24px;
+  background-image: 
+    linear-gradient(to right, var(--grid-color) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-color) 1px, transparent 1px);
+  mask-image: radial-gradient(circle at top right, black 30%, transparent 80%);
+  -webkit-mask-image: radial-gradient(circle at top right, black 30%, transparent 80%);
+}
+
+/* Shadows and glow */
+.shadow-soft {
+  box-shadow: 0 4px 20px -2px var(--shadow-color), 0 2px 8px -1px var(--shadow-color);
+}
+
+.shadow-glow {
+  box-shadow: 0 10px 30px -5px var(--shadow-color), 0 0 25px 0 var(--glow-color);
+}
+
+.shadow-glow-hover:hover {
+  box-shadow: 0 12px 35px -5px var(--shadow-color), 0 0 35px 2px var(--glow-color);
+  transform: translateY(-1px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Animations */
+@keyframes pulse-dot-anim {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.4; }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot-anim 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes shimmer-anim {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, var(--card) 25%, var(--border) 50%, var(--card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer-anim 2s infinite linear;
+}
+
+@keyframes float-flare-1 {
+  0% { transform: translate(0px, 0px) scale(1); }
+  33% { transform: translate(30px, -50px) scale(1.1); }
+  66% { transform: translate(-20px, 20px) scale(0.9); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+
+@keyframes float-flare-2 {
+  0% { transform: translate(0px, 0px) scale(1); }
+  50% { transform: translate(-40px, 40px) scale(1.2); }
+  100% { transform: translate(0px, 0px) scale(1); }
+}
+
+.animate-flare-1 {
+  animation: float-flare-1 25s ease-in-out infinite;
+}
+
+.animate-flare-2 {
+  animation: float-flare-2 30s ease-in-out infinite;
+}

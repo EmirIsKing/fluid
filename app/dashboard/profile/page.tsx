@@ -55,7 +55,7 @@ export default function ProfilePage() {
         </div>
         <div className="flex items-center justify-between">
           <span style={{ color: 'var(--text-muted)' }} className="text-sm">Preferred receive chain</span>
-          <span className="text-sm font-semibold">Polygon</span>
+          <span className="text-sm font-semibold">Base</span>
         </div>
       </div>
 

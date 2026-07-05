@@ -1,8 +1,27 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-// @ts-ignore
-import { CHAIN_ID, SUPPORTED_TOKEN_TYPE, type IAssetsResponse, UniversalAccount } from "@particle-network/universal-account-sdk";
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+// @ts-ignore — SDK ships without bundled types in some installs
+import { UniversalAccount } from '@particle-network/universal-account-sdk';
+import {
+  SUPPORTED_CHAIN_LABELS,
+  resolveChainConfig,
+  resolveTokenAddress,
+  isSupportedAssetOnChain,
+  usdToTokenAmount,
+} from '@shared/chains';
+import {
+  normalizePrimaryAssets,
+  signRootHash,
+  collectEip7702Authorizations,
+  validateRecipientAddress,
+  estimateRoutePreview,
+  type RoutePreview,
+  type PrimaryAsset,
+} from '@shared/particle-utils';
+import { recordSendByWallet } from '@/app/actions/transactions';
+
+export type { PrimaryAsset } from '@shared/particle-utils';
 
 export type Transaction = {
   id: string;
@@ -10,6 +29,8 @@ export type Transaction = {
   amount: number;
   asset: string;
   chain: string;
+  sourceAsset?: string;
+  sourceChain?: string;
   to?: string;
   from?: string;
   toName?: string;
@@ -32,179 +53,247 @@ type ParticleState = {
   isConnected: boolean;
   address: string | null;
   balance: number;
+  primaryAssets: PrimaryAsset[];
   isUpgrading: boolean;
   isInitializing: boolean;
   activeChains: string[];
   transactions: Transaction[];
   contacts: Contact[];
-  mode: 'demo' | 'testnet';
-  setMode: (mode: 'demo' | 'testnet') => void;
+  mode: 'demo' | 'live';
+  particleConfigured: boolean;
+  setMode: (mode: 'demo' | 'live') => void;
   connect: (walletType: string) => Promise<void>;
   disconnect: () => void;
-  sendPayment: (to: string, amount: number, asset: string, chain: string, note?: string) => Promise<string>;
+  refreshAssets: () => Promise<void>;
+  previewRoute: (usdAmount: number, asset: string, chain: string) => RoutePreview;
+  sendPayment: (
+    to: string,
+    usdAmount: number,
+    asset: string,
+    chain: string,
+    note?: string,
+  ) => Promise<string>;
+  delegateChain: (chainId: number, chainName: string) => Promise<void>;
 };
 
 const ParticleContext = createContext<ParticleState | undefined>(undefined);
 
 const STORAGE_KEY = 'onepay_wallet';
 const MODE_STORAGE_KEY = 'onepay_mode';
+const TX_STORAGE_KEY = 'onepay_transactions';
+
+const DEMO_ADDRESS = '0x9965507B1a0595C5411CC4457ED061b402C82F24';
+
+const DEMO_ASSETS: PrimaryAsset[] = [
+  { chainId: 8453, chainName: 'Base', symbol: 'ETH', tokenAddress: '0x0000000000000000000000000000000000000000', amount: '0.05', amountInUSD: '167.50' },
+  { chainId: 8453, chainName: 'Base', symbol: 'USDC', tokenAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', amount: '420.00', amountInUSD: '420.00' },
+  { chainId: 42161, chainName: 'Arbitrum One', symbol: 'USDT', tokenAddress: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', amount: '180.00', amountInUSD: '180.00' },
+  { chainId: 1, chainName: 'Ethereum', symbol: 'USDC', tokenAddress: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', amount: '95.00', amountInUSD: '95.00' },
+];
 
 const MOCK_CONTACTS: Contact[] = [
-  { id: '1', name: 'Bob', username: 'bob', address: '0xBob123...', avatar: 'B', preferred: { asset: 'USDC', chain: 'Polygon' } },
-  { id: '2', name: 'Alice', username: 'alice', address: '0xAlice456...', avatar: 'A', preferred: { asset: 'ETH', chain: 'Base' } },
-  { id: '3', name: 'Carol', username: 'carol', address: '0xCarol789...', avatar: 'C', preferred: { asset: 'USDT', chain: 'Arbitrum' } },
-  { id: '4', name: 'David', username: 'david', address: '0xDavid321...', avatar: 'D', preferred: { asset: 'USDC', chain: 'Ethereum' } },
+  { id: '1', name: 'Bob', username: 'bob', address: '0x742d35Cc6634C0532925a3b844Bc454e4438f44e', avatar: 'B', preferred: { asset: 'USDC', chain: 'Base' } },
+  { id: '2', name: 'Alice', username: 'alice', address: '0x8626f6940E2eb28930eFb4CeF49B2d1F2C9C1199', avatar: 'A', preferred: { asset: 'ETH', chain: 'Arbitrum One' } },
+  { id: '3', name: 'Carol', username: 'carol', address: '0xdD2FD4581271e230360230F9337D7c0430Bf44C0', avatar: 'C', preferred: { asset: 'USDT', chain: 'Ethereum' } },
+  { id: '4', name: 'David', username: 'david', address: '0xbDA5747bFD65F08fad54C695a769E55c7577f223', avatar: 'D', preferred: { asset: 'USDC', chain: 'BNB Chain' } },
 ];
 
-const MOCK_TRANSACTIONS: Transaction[] = [
-  { id: 'tx1', type: 'sent', amount: 50, asset: 'USDC', chain: 'Polygon', toName: 'Bob', date: 'Today, 2:34 PM', status: 'completed', txHash: '0xabc...' },
-  { id: 'tx2', type: 'received', amount: 120, asset: 'ETH', chain: 'Base', fromName: 'Alice', date: 'Yesterday, 11:00 AM', status: 'completed', txHash: '0xdef...' },
-  { id: 'tx3', type: 'sent', amount: 25, asset: 'USDT', chain: 'Arbitrum', toName: 'Carol', date: 'Jul 29, 4:20 PM', status: 'completed', txHash: '0xghi...' },
-];
+function sumUsd(assets: PrimaryAsset[]): number {
+  return assets.reduce((acc, a) => acc + (parseFloat(a.amountInUSD) || 0), 0);
+}
+
+function chainsFromAssets(assets: PrimaryAsset[]): string[] {
+  const names = new Set<string>();
+  for (const asset of assets) {
+    names.add(resolveChainConfig(asset.chainName).label);
+  }
+  return [...names];
+}
+
+function loadStoredTransactions(): Transaction[] {
+  try {
+    const raw = localStorage.getItem(TX_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function createUaInstance(ownerAddress: string) {
+  if (!UniversalAccount || !process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID) return null;
+  return new UniversalAccount({
+    projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
+    projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+    smartAccountOptions: {
+      projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
+      projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+      projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
+      ownerAddress,
+    },
+  });
+}
+
 export function ParticleProvider({ children }: { children: React.ReactNode }) {
+  const particleConfigured = Boolean(
+    process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID &&
+    process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY &&
+    process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
+  );
 
   const [isConnected, setIsConnected] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState(0);
+  const [primaryAssets, setPrimaryAssets] = useState<PrimaryAsset[]>([]);
   const [uaInstance, setUaInstance] = useState<any>(null);
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [activeChains, setActiveChains] = useState<string[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>(MOCK_TRANSACTIONS);
-  const [mode, setModeState] = useState<'demo' | 'testnet'>('testnet');
+  const [activeChains, setActiveChains] = useState<string[]>(SUPPORTED_CHAIN_LABELS);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [mode, setModeState] = useState<'demo' | 'live'>(particleConfigured ? 'live' : 'demo');
   const contacts = MOCK_CONTACTS;
 
-  const setMode = (newMode: 'demo' | 'testnet') => {
+  const persistWallet = useCallback((walletData: { address: string; balance: number; activeChains: string[] }) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(walletData));
+  }, []);
+
+  const persistTransactions = useCallback((txs: Transaction[]) => {
+    localStorage.setItem(TX_STORAGE_KEY, JSON.stringify(txs));
+  }, []);
+
+  const setMode = (newMode: 'demo' | 'live') => {
+    if (newMode === 'live' && !particleConfigured) {
+      alert('Add Particle credentials to .env.local to use live mode.');
+      return;
+    }
     setModeState(newMode);
     localStorage.setItem(MODE_STORAGE_KEY, newMode);
     disconnect();
   };
 
-  const refreshBalance = async (userAddress: string) => {
-    if (!userAddress) return;
+  const applyDemoState = useCallback(() => {
+    const demoBalance = sumUsd(DEMO_ASSETS);
+    setIsConnected(true);
+    setAddress(DEMO_ADDRESS);
+    setBalance(demoBalance);
+    setPrimaryAssets(DEMO_ASSETS);
+    setActiveChains(chainsFromAssets(DEMO_ASSETS));
+    persistWallet({ address: DEMO_ADDRESS, balance: demoBalance, activeChains: chainsFromAssets(DEMO_ASSETS) });
+  }, [persistWallet]);
+
+  const refreshAssets = useCallback(async (userAddress?: string) => {
+    const addr = userAddress ?? address;
+    if (!addr) return;
+
+    if (mode === 'demo') {
+      setPrimaryAssets(DEMO_ASSETS);
+      setBalance(sumUsd(DEMO_ASSETS));
+      setActiveChains(chainsFromAssets(DEMO_ASSETS));
+      return;
+    }
+
     try {
-      if (UniversalAccount && process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID) {
-        const ua = new UniversalAccount({
-          projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
-          projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-          smartAccountOptions: {
-            projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
-            projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-            projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
-            ownerAddress: userAddress,
-          }
-        });
-        const result = await ua.getPrimaryAssets();
-        if (result && result.assets) {
-          const totalUsdBalance = result.assets.reduce(
-            (acc: number, asset: any) => acc + (parseFloat(asset.amountInUSD) || 0),
-            0
-          );
-          setBalance(totalUsdBalance);
-        }
-      }
+      const ua = uaInstance ?? createUaInstance(addr);
+      if (!ua) return;
+      if (!uaInstance) setUaInstance(ua);
+
+      const result = await ua.getPrimaryAssets();
+      const assets = normalizePrimaryAssets(result?.assets ?? []);
+      setPrimaryAssets(assets);
+      setBalance(sumUsd(assets));
+      setActiveChains(chainsFromAssets(assets));
+      persistWallet({ address: addr, balance: sumUsd(assets), activeChains: chainsFromAssets(assets) });
     } catch (err) {
       console.error('Error refreshing balance:', err);
     }
-  };
+  }, [address, mode, uaInstance, persistWallet]);
 
   useEffect(() => {
     try {
-      const savedMode = localStorage.getItem(MODE_STORAGE_KEY) as 'demo' | 'testnet';
-      if (savedMode) setModeState(savedMode);
+      const savedMode = localStorage.getItem(MODE_STORAGE_KEY) as 'demo' | 'live' | 'testnet' | null;
+      if (savedMode === 'demo' || savedMode === 'live') {
+        setModeState(savedMode);
+      } else if (!particleConfigured) {
+        setModeState('demo');
+      }
+
+      setTransactions(loadStoredTransactions());
 
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        const { address, balance, activeChains } = JSON.parse(saved);
+        const { address: savedAddress, balance: savedBalance, activeChains: savedChains } = JSON.parse(saved);
         setIsConnected(true);
-        setAddress(address);
-        setBalance(balance);
-        setActiveChains(activeChains);
+        setAddress(savedAddress);
+        setBalance(savedBalance);
+        setActiveChains(savedChains?.length ? savedChains : SUPPORTED_CHAIN_LABELS);
 
-        if (UniversalAccount && process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID && address) {
-          const ua = new UniversalAccount({
-            projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
-            projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-            smartAccountOptions: {
-              projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
-              projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-              projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
-              ownerAddress: address,
-            }
-          });
-          setUaInstance(ua);
+        const effectiveMode = savedMode === 'demo' ? 'demo' : mode;
+        if (effectiveMode === 'demo') {
+          setPrimaryAssets(DEMO_ASSETS);
+        } else if (savedAddress) {
+          const ua = createUaInstance(savedAddress);
+          if (ua) setUaInstance(ua);
         }
       }
-    } catch { } finally {
+    } catch {
+      /* ignore corrupt storage */
+    } finally {
       setIsInitializing(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (isConnected && address) {
-      refreshBalance(address);
-      const interval = setInterval(() => {
-        refreshBalance(address);
-      }, 15000);
+      refreshAssets(address);
+      const interval = setInterval(() => refreshAssets(address), 15000);
       return () => clearInterval(interval);
     }
-  }, [isConnected, address]);
+  }, [isConnected, address, refreshAssets]);
 
-  const connect = async (walletType: string) => {
+  const connect = async (_walletType: string) => {
     setIsUpgrading(true);
 
-    if (typeof window !== 'undefined' && (window as any).ethereum) {
-      try {
-        const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
-        const userAddress = accounts[0];
+    if (mode === 'demo') {
+      applyDemoState();
+      setIsUpgrading(false);
+      return;
+    }
 
-        let ua: any = null;
-        let fetchedBalance = 0;
-
-        if (UniversalAccount && process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID) {
-          ua = new UniversalAccount({
-            projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
-            projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-            smartAccountOptions: {
-              projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
-              projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-              projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
-              ownerAddress: userAddress,
-            }
-          });
-          setUaInstance(ua);
-
-          try {
-            const result = await ua.getPrimaryAssets();
-            if (result && result.assets) {
-              fetchedBalance = result.assets.reduce(
-                (acc: number, asset: any) => acc + (parseFloat(asset.amountInUSD) || 0),
-                0
-              );
-            }
-          } catch { }
-        }
-
-        const walletData = {
-          address: userAddress,
-          balance: fetchedBalance,
-          activeChains: ['Ethereum', 'Base', 'Arbitrum One', 'BNB Chain', 'X Layer'],
-        };
-
-        setIsConnected(true);
-        setAddress(walletData.address);
-        setBalance(walletData.balance);
-        setActiveChains(walletData.activeChains);
-        setIsUpgrading(false);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(walletData));
-      } catch (e) {
-        console.error('MetaMask/UniversalAccount connection failed', e);
-        setIsUpgrading(false);
-        alert('Failed to connect to MetaMask.');
-      }
-    } else {
+    if (typeof window === 'undefined' || !(window as any).ethereum) {
       setIsUpgrading(false);
       alert('MetaMask is not installed.');
+      return;
+    }
+
+    try {
+      const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
+      const userAddress = accounts[0];
+      const ua = createUaInstance(userAddress);
+      if (ua) setUaInstance(ua);
+
+      let assets: PrimaryAsset[] = [];
+      if (ua) {
+        try {
+          const result = await ua.getPrimaryAssets();
+          assets = normalizePrimaryAssets(result?.assets ?? []);
+        } catch {
+          /* balance may be zero on new accounts */
+        }
+      }
+
+      const total = sumUsd(assets);
+      const chains = chainsFromAssets(assets);
+      setIsConnected(true);
+      setAddress(userAddress);
+      setBalance(total);
+      setPrimaryAssets(assets);
+      setActiveChains(chains);
+      persistWallet({ address: userAddress, balance: total, activeChains: chains });
+    } catch (e) {
+      console.error('MetaMask/UniversalAccount connection failed', e);
+      alert('Failed to connect to MetaMask.');
+    } finally {
+      setIsUpgrading(false);
     }
   };
 
@@ -212,105 +301,184 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
     setIsConnected(false);
     setAddress(null);
     setBalance(0);
-    setActiveChains([]);
+    setPrimaryAssets([]);
+    setUaInstance(null);
+    setActiveChains(SUPPORTED_CHAIN_LABELS);
     localStorage.removeItem(STORAGE_KEY);
   };
 
-  const sendPayment = async (to: string, amount: number, asset: string, chain: string, note?: string): Promise<string> => {
-    if (typeof window !== 'undefined' && (window as any).ethereum && address) {
-      // Resolve recipient address
-      let recipientAddress = to;
-      const resolved = resolveRecipient(to, contacts);
-      if (resolved) {
-        recipientAddress = resolved.address;
-      }
+  const previewRoute = useCallback(
+    (usdAmount: number, asset: string, chain: string): RoutePreview =>
+      estimateRoutePreview(primaryAssets, usdAmount, asset, chain),
+    [primaryAssets],
+  );
 
-      // Check if the address is a mock one (like '0xBob123...')
-      if (!recipientAddress.startsWith('0x') || recipientAddress.includes('.')) {
-        recipientAddress = '0x9965507B1a0595C5411CC4457ED061b402C82F24';
-      }
+  const appendTransaction = useCallback(
+    (tx: Transaction) => {
+      setTransactions(prev => {
+        const next = [tx, ...prev];
+        persistTransactions(next);
+        return next;
+      });
+    },
+    [persistTransactions],
+  );
 
-      let targetChainId = CHAIN_ID.BASE_MAINNET;
-      let targetChainName = 'Base';
-      let tokenAddress = '0x0000000000000000000000000000000000000000'; // Default native (Base ETH)
+  const sendPayment = async (
+    to: string,
+    usdAmount: number,
+    asset: string,
+    chain: string,
+    note?: string,
+  ): Promise<string> => {
+    if (usdAmount <= 0) throw new Error('Amount must be greater than zero.');
+    if (usdAmount > balance) throw new Error('Amount exceeds your unified balance.');
 
-      const chainLower = chain.toLowerCase();
-      if (chainLower.includes('ether')) {
-        targetChainId = CHAIN_ID.ETHEREUM_MAINNET;
-        targetChainName = 'Ethereum';
-        // If sending USDC on Ethereum Mainnet
-        if (asset.toUpperCase() === 'USDC') tokenAddress = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
-        else if (asset.toUpperCase() === 'USDT') tokenAddress = '0xdAC17F958D2ee523a2206206994597C13D831ec7';
-      } else if (chainLower.includes('arbitrum')) {
-        targetChainId = CHAIN_ID.ARBITRUM_MAINNET_ONE;
-        targetChainName = 'Arbitrum One';
-        if (asset.toUpperCase() === 'USDC') tokenAddress = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
-        else if (asset.toUpperCase() === 'USDT') tokenAddress = '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9';
-      } else if (chainLower.includes('bnb') || chainLower.includes('bsc')) {
-        targetChainId = CHAIN_ID.BSC_MAINNET;
-        targetChainName = 'BNB Chain';
-        if (asset.toUpperCase() === 'USDC') tokenAddress = '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d';
-        else if (asset.toUpperCase() === 'USDT') tokenAddress = '0x55d398326f99059fF775485246999027B3197955';
-      } else if (chainLower.includes('x layer') || chainLower.includes('xlayer')) {
-        targetChainId = CHAIN_ID.XLAYER_MAINNET;
-        targetChainName = 'X Layer';
-      } else {
-        // Base mainnet
-        if (asset.toUpperCase() === 'USDC') tokenAddress = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-      }
+    const chainConfig = resolveChainConfig(chain);
+    if (!isSupportedAssetOnChain(chainConfig.value, asset)) {
+      throw new Error(`${asset} is not available on ${chainConfig.label}.`);
+    }
 
-      if (uaInstance) {
-        try {
-          const transaction = await uaInstance.createTransferTransaction({
-            token: {
-              chainId: targetChainId,
-              address: tokenAddress,
-            },
-            amount: amount.toString(),
-            receiver: recipientAddress,
-          });
+    const resolved = resolveRecipient(to, contacts);
+    const recipientAddress = validateRecipientAddress(to, resolved?.address);
 
-          const signature = await (window as any).ethereum.request({
-            method: 'personal_sign',
-            params: [transaction.rootHash, address],
-          });
+    const route = previewRoute(usdAmount, asset, chainConfig.value);
+    const tokenAmount = route.tokenAmount;
 
-          const result = await uaInstance.sendTransaction(transaction, signature);
-          const txHash = result.transactionId;
+    if (mode === 'demo') {
+      await new Promise(r => setTimeout(r, 1200));
+      const txHash = `demo-${Date.now().toString(16)}`;
+      appendTransaction({
+        id: 'tx' + Date.now(),
+        type: 'sent',
+        amount: usdAmount,
+        asset: asset.toUpperCase(),
+        chain: chainConfig.label,
+        sourceAsset: route.sourceAsset,
+        sourceChain: route.sourceChain,
+        toName: resolved?.name ?? recipientAddress.slice(0, 8),
+        to: recipientAddress,
+        date: 'Just now',
+        status: 'completed',
+        txHash,
+      });
+      return txHash;
+    }
 
-          const newTx: Transaction = {
-            id: 'tx' + Date.now(),
-            type: 'sent',
-            amount,
-            asset,
-            chain: targetChainName,
-            toName: resolved ? resolved.name : to.substring(0, 8),
-            to: recipientAddress,
-            date: 'Just now',
-            status: 'completed',
-            txHash,
-          };
-
-          setTransactions(prev => [newTx, ...prev]);
-          setTimeout(() => refreshBalance(address), 8000);
-          return txHash;
-        } catch (err: any) {
-          console.error('[Particle UA] Transfer transaction failed:', err);
-          throw new Error(err.message || 'Transfer failed');
-        }
-      }
-      throw new Error('Universal Account instance is not initialized.');
-
-    } else {
+    if (typeof window === 'undefined' || !(window as any).ethereum || !address) {
       throw new Error('MetaMask is not connected or installed');
+    }
+    if (!uaInstance) throw new Error('Universal Account is not initialized.');
+
+    const tokenAddress = resolveTokenAddress(chainConfig.value, asset);
+
+    try {
+      const transaction = await uaInstance.createTransferTransaction({
+        token: {
+          chainId: chainConfig.chainId,
+          address: tokenAddress,
+        },
+        amount: tokenAmount,
+        receiver: recipientAddress,
+      });
+
+      const signature = await signRootHash(transaction.rootHash, address);
+      const authorizations = await collectEip7702Authorizations(transaction, address);
+
+      const result = authorizations.length
+        ? await uaInstance.sendTransaction(transaction, signature, authorizations)
+        : await uaInstance.sendTransaction(transaction, signature);
+
+      const txHash = result.transactionId ?? result.txHash ?? String(result);
+
+      appendTransaction({
+        id: 'tx' + Date.now(),
+        type: 'sent',
+        amount: usdAmount,
+        asset: asset.toUpperCase(),
+        chain: chainConfig.label,
+        sourceAsset: route.sourceAsset,
+        sourceChain: route.sourceChain,
+        toName: resolved?.name ?? recipientAddress.slice(0, 8),
+        to: recipientAddress,
+        date: 'Just now',
+        status: 'completed',
+        txHash,
+      });
+
+      recordSendByWallet({
+        senderAddress: address,
+        recipientAddress,
+        token: asset.toUpperCase(),
+        amount: tokenAmount,
+        sourceChain: route.sourceChain,
+        destinationChain: chainConfig.label,
+        transactionHash: txHash,
+        note,
+      }).catch(() => undefined);
+
+      setTimeout(() => refreshAssets(address), 8000);
+      return txHash;
+    } catch (err: any) {
+      console.error('[Particle UA] Transfer transaction failed:', err);
+      throw new Error(err.message || 'Transfer failed');
     }
   };
 
+  const delegateChain = async (chainId: number, chainName: string) => {
+    if (mode === 'demo') {
+      await new Promise(r => setTimeout(r, 800));
+      return;
+    }
+    if (!uaInstance || !address) throw new Error('Connect your wallet first.');
+    if (typeof window === 'undefined' || !(window as any).ethereum) {
+      throw new Error('MetaMask is not available.');
+    }
+
+    const chainConfig = SUPPORTED_CHAIN_LABELS.map(resolveChainConfig).find(c => c.chainId === chainId);
+    if (!chainConfig) throw new Error('Unsupported chain.');
+
+    const tokenAddress = resolveTokenAddress(chainConfig.value, 'USDC');
+    const transaction = await uaInstance.createTransferTransaction({
+      token: { chainId: chainConfig.chainId, address: tokenAddress },
+      amount: '0.000001',
+      receiver: address,
+    });
+
+    const signature = await signRootHash(transaction.rootHash, address);
+    const authorizations = await collectEip7702Authorizations(transaction, address);
+    if (authorizations.length) {
+      await uaInstance.sendTransaction(transaction, signature, authorizations);
+    } else {
+      await uaInstance.sendTransaction(transaction, signature);
+    }
+
+    console.info(`EIP-7702 authorization completed for ${chainName}`);
+  };
+
   return (
-    <ParticleContext.Provider value={{
-      isConnected, address, balance, isUpgrading, isInitializing, activeChains,
-      transactions, contacts, mode, setMode, connect, disconnect, sendPayment,
-    }}>
+    <ParticleContext.Provider
+      value={{
+        isConnected,
+        address,
+        balance,
+        primaryAssets,
+        isUpgrading,
+        isInitializing,
+        activeChains,
+        transactions,
+        contacts,
+        mode,
+        particleConfigured,
+        setMode,
+        connect,
+        disconnect,
+        refreshAssets,
+        previewRoute,
+        sendPayment,
+        delegateChain,
+      }}
+    >
       {children}
     </ParticleContext.Provider>
   );
@@ -322,7 +490,6 @@ export function useParticle() {
   return ctx;
 }
 
-// Resolve @username to a contact
 export function resolveRecipient(input: string, contacts: Contact[]): Contact | null {
   const query = input.startsWith('@') ? input.slice(1).toLowerCase() : input.toLowerCase();
   return contacts.find(c => c.username.toLowerCase() === query || c.name.toLowerCase() === query) ?? null;

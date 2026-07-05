@@ -1,18 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useParticle } from '@/components/ParticleProvider';
 import { Copy, Check, ChevronDown } from 'lucide-react';
+import { SUPPORTED_CHAINS, assetsForChain } from '@shared/chains';
 
 export default function ReceivePage() {
   const { address } = useParticle();
   const [copied, setCopied] = useState(false);
   const [asset, setAsset] = useState('USDC');
-  const [chain, setChain] = useState('Polygon');
+  const [chain, setChain] = useState('Base');
   const [amount, setAmount] = useState('');
 
-  const paymentLink = `${typeof window !== 'undefined' ? window.location.origin : 'https://onepay.app'}/pay/${address?.slice(0, 10)}?asset=${asset}&chain=${chain}${amount ? `&amount=${amount}` : ''}`;
+  const chainAssets = useMemo(() => assetsForChain(chain), [chain]);
+
+  const paymentLink = `${typeof window !== 'undefined' ? window.location.origin : 'https://onepay.app'}/send?to=${address ?? ''}&asset=${asset}&chain=${encodeURIComponent(chain)}${amount ? `&amount=${amount}` : ''}`;
 
   const copy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -25,14 +28,12 @@ export default function ReceivePage() {
       <h1 className="text-3xl font-black mb-8">Receive Money</h1>
 
       <div className="card text-center space-y-6">
-        {/* QR Code */}
         <div className="flex justify-center">
           <div style={{ background: 'white', borderRadius: 20, padding: 20 }}>
             <QRCodeSVG value={paymentLink} size={200} level="H" />
           </div>
         </div>
 
-        {/* Address */}
         <div>
           <p style={{ color: 'var(--text-muted)' }} className="text-xs mb-2">Your Universal Account Address</p>
           <button
@@ -45,7 +46,6 @@ export default function ReceivePage() {
           </button>
         </div>
 
-        {/* Request specific amount */}
         <div style={{ borderTop: '1px solid var(--border)' }} className="pt-6 space-y-4">
           <p className="font-semibold text-left">Request Specific Amount</p>
           <div className="relative">
@@ -60,21 +60,34 @@ export default function ReceivePage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="relative">
-              <select className="input-dark appearance-none pr-8" value={asset} onChange={e => setAsset(e.target.value)}>
-                {['USDC', 'USDT', 'ETH'].map(a => <option key={a}>{a}</option>)}
+              <select
+                className="input-dark appearance-none pr-8"
+                value={asset}
+                onChange={e => setAsset(e.target.value)}
+              >
+                {chainAssets.map(a => <option key={a}>{a}</option>)}
               </select>
               <ChevronDown size={14} style={{ color: 'var(--text-muted)', position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
             </div>
             <div className="relative">
-              <select className="input-dark appearance-none pr-8" value={chain} onChange={e => setChain(e.target.value)}>
-                {['Polygon', 'Ethereum', 'Base', 'Arbitrum'].map(c => <option key={c}>{c}</option>)}
+              <select
+                className="input-dark appearance-none pr-8"
+                value={chain}
+                onChange={e => {
+                  setChain(e.target.value);
+                  const nextAssets = assetsForChain(e.target.value);
+                  if (!nextAssets.includes(asset as typeof nextAssets[number])) {
+                    setAsset(nextAssets[0] ?? 'USDC');
+                  }
+                }}
+              >
+                {SUPPORTED_CHAINS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
               </select>
               <ChevronDown size={14} style={{ color: 'var(--text-muted)', position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
             </div>
           </div>
         </div>
 
-        {/* Share link */}
         <button
           onClick={() => copy(paymentLink)}
           className="btn-accent w-full py-4 flex items-center justify-center gap-2"

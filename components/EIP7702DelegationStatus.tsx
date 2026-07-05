@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Zap, AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import { SUPPORTED_CHAINS } from "@shared/chains";
 
 interface DelegationChain {
   id: number;
@@ -16,13 +17,11 @@ interface EIP7702DelegationStatusProps {
   onDelegate?: (chainId: number) => Promise<void>;
 }
 
-const DEFAULT_CHAINS: DelegationChain[] = [
-  { id: 1, name: "Ethereum", isDelegated: false },
-  { id: 8453, name: "Base", isDelegated: false },
-  { id: 137, name: "Polygon", isDelegated: true },
-  { id: 42161, name: "Arbitrum", isDelegated: false },
-  { id: 56, name: "BNB Chain", isDelegated: false },
-];
+const DEFAULT_CHAINS: DelegationChain[] = SUPPORTED_CHAINS.map(c => ({
+  id: c.chainId,
+  name: c.label,
+  isDelegated: false,
+}));
 
 export function EIP7702DelegationStatus({
   chains = DEFAULT_CHAINS,
@@ -59,7 +58,6 @@ export function EIP7702DelegationStatus({
   return (
     <Card className="bg-card/50 border-border/50 p-6">
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-cyan-500/20 rounded-lg flex items-center justify-center">
@@ -68,7 +66,7 @@ export function EIP7702DelegationStatus({
             <div>
               <h3 className="font-semibold">EIP-7702 Delegation</h3>
               <p className="text-xs text-muted-foreground">
-                Enable smart account features on supported chains
+                Enable Universal Account routing on each supported chain
               </p>
             </div>
           </div>
@@ -77,16 +75,13 @@ export function EIP7702DelegationStatus({
           </Badge>
         </div>
 
-        {/* Info Box */}
         <div className="bg-cyan-500/10 border border-cyan-400/30 rounded-lg p-4">
           <p className="text-sm text-foreground">
-            <span className="font-semibold">EIP-7702 Delegation:</span> Enables your wallet to use smart
-            account features like batch transactions, gas sponsorship, and cross-chain transfers on each
-            chain independently.
+            <span className="font-semibold">EIP-7702 Delegation:</span> Authorizes your EOA to act as a Universal Account
+            on each chain, enabling gas sponsorship and cross-chain settlement from any Primary Asset you hold.
           </p>
         </div>
 
-        {/* Chain List */}
         <div className="space-y-3">
           {chains.map((chain) => {
             const isDelegated = delegationStates[chain.id];
@@ -146,23 +141,20 @@ export function EIP7702DelegationStatus({
           })}
         </div>
 
-        {/* Benefits */}
         <div className="bg-background/50 rounded-lg p-4 border border-border/50">
           <p className="text-xs font-semibold text-muted-foreground mb-3">Benefits of Delegation</p>
           <ul className="text-xs text-muted-foreground space-y-2 list-disc list-inside">
-            <li>Batch multiple transactions into one</li>
-            <li>Sponsor gas fees for users</li>
-            <li>Enable cross-chain transfers</li>
-            <li>Improved security with smart account features</li>
+            <li>Cross-chain payments from any Primary Asset</li>
+            <li>Gas sponsored from your unified balance</li>
+            <li>Single-signature settlement on destination chains</li>
+            <li>No manual network switching required</li>
           </ul>
         </div>
 
-        {/* Status Summary */}
         {delegatedCount === totalChains && (
           <div className="bg-green-500/10 border border-green-400/30 rounded-lg p-4">
             <p className="text-sm text-green-300">
-              ✓ All chains delegated! You can now use full smart account features across all supported
-              networks.
+              ✓ All supported chains delegated. You can send to any destination from whatever you hold.
             </p>
           </div>
         )}

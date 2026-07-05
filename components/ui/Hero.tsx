@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import WalletConnectModal from '@/components/WalletConnectModal';
 import { useParticle } from '@/components/ParticleProvider';
+import { SUPPORTED_CHAINS } from '@shared/chains';
 
 export default function Hero() {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -13,10 +14,10 @@ export default function Hero() {
     setMounted(true);
   }, []);
 
-  const CHAINS = ['Ethereum', 'Base', 'Polygon', 'Arbitrum', 'BNB Chain', 'Solana'];
+  const CHAINS = SUPPORTED_CHAINS.map(c => c.label);
   const FEATURES = [
     { icon: '⚡', title: 'One Balance', desc: 'See all your assets unified across every chain.' },
-    { icon: '🔁', title: 'No Bridges', desc: 'Particle routes cross-chain swaps automatically.' },
+    { icon: '🔁', title: 'No Bridge UI', desc: 'Particle settles cross-chain behind the scenes — you never swap or bridge yourself.' },
     { icon: '⛽', title: 'Gas Abstracted', desc: 'Never manage gas tokens. We handle it all.' },
     { icon: '🔑', title: 'Same Wallet', desc: 'Keep your MetaMask address. No migration needed.' },
   ];
@@ -80,12 +81,12 @@ export default function Hero() {
                 <div style={{ color: 'var(--accent)' }} className="text-2xl">→</div>
                 <div className="text-right">
                   <p style={{ color: 'var(--text-muted)' }} className="text-xs">Bob gets</p>
-                  <p className="text-2xl font-bold">50 USDC <span style={{ color: 'var(--text-muted)' }} className="text-sm font-normal">Polygon</span></p>
+                  <p className="text-2xl font-bold">50 USDC <span style={{ color: 'var(--text-muted)' }} className="text-sm font-normal">Base</span></p>
                 </div>
               </div>
               <div style={{ background: 'var(--bg-elevated)', borderRadius: 12 }} className="p-3 text-center">
-                <p style={{ color: 'var(--accent)' }} className="text-xs font-semibold">✦ Particle Network auto-routes the swap</p>
-                <p style={{ color: 'var(--text-muted)' }} className="text-xs">No bridges · No gas management · 1 signature</p>
+                <p style={{ color: 'var(--accent)' }} className="text-xs font-semibold">✦ Particle auto-routes from your balance</p>
+                <p style={{ color: 'var(--text-muted)' }} className="text-xs">No swap UI · No bridge UI · 1 signature</p>
               </div>
             </div>
           </div>
