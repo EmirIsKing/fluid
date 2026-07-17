@@ -30,8 +30,9 @@ export function normalizePrimaryAssets(rawAssets: unknown[]): PrimaryAsset[] {
   
   const normalized: PrimaryAsset[] = [];
   
-  for (const asset of rawAssets) {
-    if (!asset) continue;
+  for (const rawAsset of rawAssets) {
+    if (!rawAsset || typeof rawAsset !== 'object') continue;
+    const asset = rawAsset as Record<string, any>;
     
     // Check if it has chainAggregation (modern SDK structure)
     if (Array.isArray(asset.chainAggregation)) {
