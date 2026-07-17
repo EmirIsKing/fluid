@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useParticle, type Transaction } from '@/components/ParticleProvider';
+import { resolveChainConfig } from '@shared/chains';
 
 export const head = () => ({
   title: 'Fluid — One address for every network',
@@ -108,13 +109,26 @@ export default function Overview() {
     setTimeout(() => setCopied(false), 1600);
   };
 
+  /* ── network filtering ── */
+  const filteredAssets = useMemo(() => {
+    if (activeNetwork === 'all') return primaryAssets;
+    const targetChain = resolveChainConfig(activeNetwork).value;
+    return primaryAssets.filter(
+      asset => resolveChainConfig(asset.chainName).value === targetChain
+    );
+  }, [primaryAssets, activeNetwork]);
+
+  const filteredBalance = useMemo(() => {
+    return filteredAssets.reduce((acc, a) => acc + (parseFloat(a.amountInUSD) || 0), 0);
+  }, [filteredAssets]);
+
   /* ── balance display ── */
   const balanceDisplay = usdMode
-    ? `$${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-    : `${(balance / 3350).toFixed(4)} ETH`;
+    ? `$${filteredBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    : `${(filteredBalance / 3350).toFixed(4)} ETH`;
 
   /* ── chart ── */
-  const chartData = useMemo(() => buildChartData(balance, timeRange), [balance, timeRange]);
+  const chartData = useMemo(() => buildChartData(filteredBalance, timeRange), [filteredBalance, timeRange]);
 
   /* ── activity feed ── */
   const activityRows = useMemo(() => {
@@ -125,7 +139,7 @@ export default function Overview() {
 
   /* ── donut segments ── */
   const chainBreakdown = useMemo(() => {
-    if (!primaryAssets.length) return [{ name: 'No data', pct: 100, color: 'var(--border)' }];
+    if (!filteredAssets.length) return [{ name: 'No data', pct: 100, color: 'var(--border)' }];
     const colors: Record<string, string> = {
       'Ethereum': '#6366f1', 'Ethereum Mainnet': '#6366f1',
       'Base': '#2dd4bf',
@@ -134,7 +148,7 @@ export default function Overview() {
       'X Layer': '#c084fc',
     };
     const byChain = new Map<string, number>();
-    for (const asset of primaryAssets) {
+    for (const asset of filteredAssets) {
       const usd = parseFloat(asset.amountInUSD) || 0;
       byChain.set(asset.chainName, (byChain.get(asset.chainName) ?? 0) + usd);
     }
@@ -144,7 +158,7 @@ export default function Overview() {
       pct: Math.round((usd / total) * 100),
       color: colors[name] ?? '#94a3b8',
     }));
-  }, [primaryAssets]);
+  }, [filteredAssets]);
 
   const circumference = 2 * Math.PI * 50; // r=50
 
@@ -278,7 +292,7 @@ export default function Overview() {
             <div className="space-y-1">
               <div className="text-[10px] font-bold text-[var(--muted)] uppercase tracking-wider">Unified Balance</div>
               <div className="font-mono text-sm font-semibold text-[var(--foreground)]">
-                ${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                ${filteredBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             </div>
             <div className="space-y-1">
@@ -315,7 +329,7 @@ export default function Overview() {
               <div className="font-serif text-5xl sm:text-6xl font-bold tracking-tight text-[var(--foreground)] truncate">
                 {balanceDisplay}
               </div>
-              {balance > 0 && (
+              {filteredBalance > 0 && (
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold rounded-full flex items-center gap-0.5">
                     <TrendingUp size={12} />
@@ -349,7 +363,7 @@ export default function Overview() {
             <div className="space-y-1">
               <h2 className="text-lg font-semibold tracking-tight">Portfolio Value</h2>
               <p className="text-xs text-[var(--muted-foreground)]">
-                {balance > 0 ? 'Projected historical curve based on current Particle UA balance' : 'Connect wallet to see portfolio history'}
+                {filteredBalance > 0 ? 'Projected historical curve based on current Particle UA balance' : 'Connect wallet to see portfolio history'}
               </p>
             </div>
             <div className="flex bg-[var(--background)] border border-[var(--border)] rounded-lg p-1 text-xs shrink-0 self-start sm:self-auto">
@@ -502,7 +516,7 @@ export default function Overview() {
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                   <span className="text-[10px] font-bold text-[var(--muted-foreground)] uppercase tracking-wider">Balance</span>
                   <span className="font-serif text-xl font-bold text-[var(--foreground)] mt-0.5">
-                    ${balance.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+                    ${filteredBalance.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                   </span>
                 </div>
               </div>

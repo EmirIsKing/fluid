@@ -38,7 +38,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div style={{ background: 'var(--bg)', minHeight: '100vh' }} className="flex flex-col md:flex-row">
       {/* Sidebar — desktop */}
       <aside style={{ background: 'var(--bg-card)', borderRight: '1px solid var(--border)' }}
-        className="hidden md:flex flex-col w-64 min-h-screen sticky top-0">
+        className="hidden md:flex flex-col w-64 h-screen sticky top-0 overflow-y-auto">
         <div style={{ borderBottom: '1px solid var(--border)' }} className="h-16 flex items-center px-6">
           <Link href="/" style={{ color: 'var(--accent)' }} className="font-bold text-xl">Fluid</Link>
         </div>

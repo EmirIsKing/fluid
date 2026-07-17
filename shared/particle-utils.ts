@@ -2,6 +2,7 @@ import { getBytes, hexlify, isAddress } from 'ethers';
 import {
   FALLBACK_USD_PRICES,
   STABLE_ASSETS,
+  SUPPORTED_CHAINS,
   type SupportedAsset,
   usdToTokenAmount,
 } from '@shared/chains';
@@ -25,25 +26,61 @@ export type RoutePreview = {
 };
 
 export function normalizePrimaryAssets(rawAssets: unknown[]): PrimaryAsset[] {
-  return rawAssets
-    .map((raw: any) => {
-      const amount = String(raw?.amount ?? raw?.tokenAmount ?? '0');
-      const amountInUSD = String(raw?.amountInUSD ?? raw?.amountInUsd ?? '0');
-      const symbol = String(raw?.symbol ?? raw?.tokenSymbol ?? raw?.type ?? 'UNKNOWN').toUpperCase();
-      const chainName = String(raw?.chainName ?? raw?.network ?? raw?.chain ?? 'Unknown');
-      const chainId = Number(raw?.chainId ?? 0);
-      const tokenAddress = String(raw?.tokenAddress ?? raw?.address ?? '');
-      if (!symbol || parseFloat(amountInUSD) <= 0) return null;
-      return {
-        chainId,
-        chainName,
-        symbol,
-        tokenAddress,
-        amount,
-        amountInUSD,
-      } satisfies PrimaryAsset;
-    })
-    .filter(Boolean) as PrimaryAsset[];
+  if (!Array.isArray(rawAssets)) return [];
+  
+  const normalized: PrimaryAsset[] = [];
+  
+  for (const asset of rawAssets) {
+    if (!asset) continue;
+    
+    // Check if it has chainAggregation (modern SDK structure)
+    if (Array.isArray(asset.chainAggregation)) {
+      for (const item of asset.chainAggregation) {
+        if (!item || !item.token) continue;
+        
+        const amount = String(item.amount ?? '0');
+        const amountInUSD = String(item.amountInUSD ?? '0');
+        const symbol = String(item.token.symbol ?? item.token.type ?? asset.tokenType ?? 'UNKNOWN').toUpperCase();
+        const chainId = Number(item.token.chainId ?? 0);
+        
+        const chainConfig = SUPPORTED_CHAINS.find(c => c.chainId === chainId);
+        const chainName = chainConfig ? chainConfig.value : 'Unknown';
+        const tokenAddress = String(item.token.address ?? '');
+        
+        if (parseFloat(amountInUSD) > 0) {
+          normalized.push({
+            chainId,
+            chainName,
+            symbol,
+            tokenAddress,
+            amount,
+            amountInUSD,
+          });
+        }
+      }
+    } else {
+      // Fallback for legacy format or already-normalized items (if any)
+      const amount = String(asset.amount ?? asset.tokenAmount ?? '0');
+      const amountInUSD = String(asset.amountInUSD ?? asset.amountInUsd ?? '0');
+      const symbol = String(asset.symbol ?? asset.tokenSymbol ?? asset.type ?? 'UNKNOWN').toUpperCase();
+      const chainName = String(asset.chainName ?? asset.network ?? asset.chain ?? 'Unknown');
+      const chainId = Number(asset.chainId ?? 0);
+      const tokenAddress = String(asset.tokenAddress ?? asset.address ?? '');
+      
+      if (symbol && parseFloat(amountInUSD) > 0) {
+        normalized.push({
+          chainId,
+          chainName,
+          symbol,
+          tokenAddress,
+          amount,
+          amountInUSD,
+        });
+      }
+    }
+  }
+  
+  return normalized;
 }
 
 export function getAssetUsdPrice(asset: PrimaryAsset): number {

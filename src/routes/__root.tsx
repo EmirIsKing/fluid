@@ -66,7 +66,7 @@ export default function RootLayout({ children }: { children?: React.ReactNode })
       </div>
 
       {/* Left Sidebar */}
-      <aside className="relative z-10 w-full md:w-64 border-b md:border-b-0 md:border-r border-[var(--border)] bg-[var(--card)] flex flex-col shrink-0">
+      <aside className="relative z-10 w-full md:w-64 border-b md:border-b-0 md:border-r border-[var(--border)] bg-[var(--card)] flex flex-col shrink-0 md:h-screen md:sticky md:top-0 md:overflow-y-auto">
         {/* Logo Section */}
         <div className="h-16 px-6 border-b border-[var(--border)] flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group">

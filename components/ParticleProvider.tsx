@@ -16,6 +16,7 @@ import {
   collectEip7702Authorizations,
   validateRecipientAddress,
   estimateRoutePreview,
+  getAssetUsdPrice,
   type RoutePreview,
   type PrimaryAsset,
 } from '@shared/particle-utils';
@@ -52,6 +53,7 @@ export type Contact = {
 type ParticleState = {
   isConnected: boolean;
   address: string | null;
+  ownerAddress: string | null;
   balance: number;
   primaryAssets: PrimaryAsset[];
   isUpgrading: boolean;
@@ -142,6 +144,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
 
   const [isConnected, setIsConnected] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
+  const [ownerAddress, setOwnerAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState(0);
   const [primaryAssets, setPrimaryAssets] = useState<PrimaryAsset[]>([]);
   const [uaInstance, setUaInstance] = useState<any>(null);
@@ -152,7 +155,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
   const [mode, setModeState] = useState<'demo' | 'live'>(particleConfigured ? 'live' : 'demo');
   const contacts = MOCK_CONTACTS;
 
-  const persistWallet = useCallback((walletData: { address: string; balance: number; activeChains: string[] }) => {
+  const persistWallet = useCallback((walletData: { address: string; ownerAddress: string; balance: number; activeChains: string[] }) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(walletData));
   }, []);
 
@@ -171,41 +174,60 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
   };
 
   const applyDemoState = useCallback(() => {
-    const demoBalance = sumUsd(DEMO_ASSETS);
+    const savedDemo = localStorage.getItem('onepay_demo_assets');
+    let currentDemoAssets = DEMO_ASSETS;
+    if (savedDemo) {
+      try {
+        currentDemoAssets = JSON.parse(savedDemo);
+      } catch {}
+    }
+    const demoBalance = sumUsd(currentDemoAssets);
     setIsConnected(true);
     setAddress(DEMO_ADDRESS);
+    setOwnerAddress(DEMO_ADDRESS);
     setBalance(demoBalance);
-    setPrimaryAssets(DEMO_ASSETS);
-    setActiveChains(chainsFromAssets(DEMO_ASSETS));
-    persistWallet({ address: DEMO_ADDRESS, balance: demoBalance, activeChains: chainsFromAssets(DEMO_ASSETS) });
+    setPrimaryAssets(currentDemoAssets);
+    setActiveChains(chainsFromAssets(currentDemoAssets));
+    persistWallet({ address: DEMO_ADDRESS, ownerAddress: DEMO_ADDRESS, balance: demoBalance, activeChains: chainsFromAssets(currentDemoAssets) });
   }, [persistWallet]);
 
-  const refreshAssets = useCallback(async (userAddress?: string) => {
-    const addr = userAddress ?? address;
-    if (!addr) return;
+  const refreshAssets = useCallback(async (userOwnerAddress?: string) => {
+    const ownerAddr = userOwnerAddress ?? ownerAddress;
+    if (!ownerAddr) return;
 
     if (mode === 'demo') {
-      setPrimaryAssets(DEMO_ASSETS);
-      setBalance(sumUsd(DEMO_ASSETS));
-      setActiveChains(chainsFromAssets(DEMO_ASSETS));
+      const savedDemo = localStorage.getItem('onepay_demo_assets');
+      let currentDemoAssets = DEMO_ASSETS;
+      if (savedDemo) {
+        try {
+          currentDemoAssets = JSON.parse(savedDemo);
+        } catch {}
+      }
+      setPrimaryAssets(currentDemoAssets);
+      setBalance(sumUsd(currentDemoAssets));
+      setActiveChains(chainsFromAssets(currentDemoAssets));
       return;
     }
 
     try {
-      const ua = uaInstance ?? createUaInstance(addr);
+      const ua = uaInstance ?? createUaInstance(ownerAddr);
       if (!ua) return;
       if (!uaInstance) setUaInstance(ua);
+
+      const smartOptions = await ua.getSmartAccountOptions();
+      const smartAccountAddress = smartOptions.smartAccountAddress ?? ownerAddr;
 
       const result = await ua.getPrimaryAssets();
       const assets = normalizePrimaryAssets(result?.assets ?? []);
       setPrimaryAssets(assets);
       setBalance(sumUsd(assets));
+      setAddress(smartAccountAddress);
       setActiveChains(chainsFromAssets(assets));
-      persistWallet({ address: addr, balance: sumUsd(assets), activeChains: chainsFromAssets(assets) });
+      persistWallet({ address: smartAccountAddress, ownerAddress: ownerAddr, balance: sumUsd(assets), activeChains: chainsFromAssets(assets) });
     } catch (err) {
       console.error('Error refreshing balance:', err);
     }
-  }, [address, mode, uaInstance, persistWallet]);
+  }, [ownerAddress, mode, uaInstance, persistWallet]);
 
   useEffect(() => {
     try {
@@ -220,17 +242,27 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
 
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        const { address: savedAddress, balance: savedBalance, activeChains: savedChains } = JSON.parse(saved);
+        const { address: savedAddress, ownerAddress: savedOwnerAddress, balance: savedBalance, activeChains: savedChains } = JSON.parse(saved);
         setIsConnected(true);
         setAddress(savedAddress);
+        setOwnerAddress(savedOwnerAddress ?? savedAddress);
         setBalance(savedBalance);
         setActiveChains(savedChains?.length ? savedChains : SUPPORTED_CHAIN_LABELS);
 
         const effectiveMode = savedMode === 'demo' ? 'demo' : mode;
         if (effectiveMode === 'demo') {
-          setPrimaryAssets(DEMO_ASSETS);
-        } else if (savedAddress) {
-          const ua = createUaInstance(savedAddress);
+          const savedDemo = localStorage.getItem('onepay_demo_assets');
+          if (savedDemo) {
+            try {
+              setPrimaryAssets(JSON.parse(savedDemo));
+            } catch {
+              setPrimaryAssets(DEMO_ASSETS);
+            }
+          } else {
+            setPrimaryAssets(DEMO_ASSETS);
+          }
+        } else if (savedOwnerAddress || savedAddress) {
+          const ua = createUaInstance(savedOwnerAddress ?? savedAddress);
           if (ua) setUaInstance(ua);
         }
       }
@@ -243,12 +275,12 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (isConnected && address) {
-      refreshAssets(address);
-      const interval = setInterval(() => refreshAssets(address), 15000);
+    if (isConnected && ownerAddress) {
+      refreshAssets(ownerAddress);
+      const interval = setInterval(() => refreshAssets(ownerAddress), 15000);
       return () => clearInterval(interval);
     }
-  }, [isConnected, address, refreshAssets]);
+  }, [isConnected, ownerAddress, refreshAssets]);
 
   const connect = async (_walletType: string) => {
     setIsUpgrading(true);
@@ -272,8 +304,12 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       if (ua) setUaInstance(ua);
 
       let assets: PrimaryAsset[] = [];
+      let smartAccountAddress = userAddress;
       if (ua) {
         try {
+          const smartOptions = await ua.getSmartAccountOptions();
+          smartAccountAddress = smartOptions.smartAccountAddress ?? userAddress;
+          
           const result = await ua.getPrimaryAssets();
           assets = normalizePrimaryAssets(result?.assets ?? []);
         } catch {
@@ -284,11 +320,12 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       const total = sumUsd(assets);
       const chains = chainsFromAssets(assets);
       setIsConnected(true);
-      setAddress(userAddress);
+      setAddress(smartAccountAddress);
+      setOwnerAddress(userAddress);
       setBalance(total);
       setPrimaryAssets(assets);
       setActiveChains(chains);
-      persistWallet({ address: userAddress, balance: total, activeChains: chains });
+      persistWallet({ address: smartAccountAddress, ownerAddress: userAddress, balance: total, activeChains: chains });
     } catch (e) {
       console.error('MetaMask/UniversalAccount connection failed', e);
       alert('Failed to connect to MetaMask.');
@@ -300,6 +337,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
   const disconnect = () => {
     setIsConnected(false);
     setAddress(null);
+    setOwnerAddress(null);
     setBalance(0);
     setPrimaryAssets([]);
     setUaInstance(null);
@@ -348,6 +386,28 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
     if (mode === 'demo') {
       await new Promise(r => setTimeout(r, 1200));
       const txHash = `demo-${Date.now().toString(16)}`;
+
+      // Deduct from demo assets
+      const nextAssets = primaryAssets.map(a => {
+        if (a.symbol === route.sourceAsset && a.chainName === route.sourceChain) {
+          const currentUsd = parseFloat(a.amountInUSD) || 0;
+          const price = getAssetUsdPrice(a);
+          const nextUsd = Math.max(0, currentUsd - usdAmount);
+          const nextAmount = (nextUsd / price).toFixed(6).replace(/\.?0+$/, '') || '0';
+          return {
+            ...a,
+            amount: nextAmount,
+            amountInUSD: nextUsd.toFixed(2),
+          };
+        }
+        return a;
+      });
+      setPrimaryAssets(nextAssets);
+      const nextTotal = sumUsd(nextAssets);
+      setBalance(nextTotal);
+      persistWallet({ address: DEMO_ADDRESS, ownerAddress: DEMO_ADDRESS, balance: nextTotal, activeChains: chainsFromAssets(nextAssets) });
+      localStorage.setItem('onepay_demo_assets', JSON.stringify(nextAssets));
+
       appendTransaction({
         id: 'tx' + Date.now(),
         type: 'sent',
@@ -365,7 +425,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       return txHash;
     }
 
-    if (typeof window === 'undefined' || !(window as any).ethereum || !address) {
+    if (typeof window === 'undefined' || !(window as any).ethereum || !ownerAddress) {
       throw new Error('MetaMask is not connected or installed');
     }
     if (!uaInstance) throw new Error('Universal Account is not initialized.');
@@ -382,8 +442,8 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         receiver: recipientAddress,
       });
 
-      const signature = await signRootHash(transaction.rootHash, address);
-      const authorizations = await collectEip7702Authorizations(transaction, address);
+      const signature = await signRootHash(transaction.rootHash, ownerAddress);
+      const authorizations = await collectEip7702Authorizations(transaction, ownerAddress);
 
       const result = authorizations.length
         ? await uaInstance.sendTransaction(transaction, signature, authorizations)
@@ -407,7 +467,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       });
 
       recordSendByWallet({
-        senderAddress: address,
+        senderAddress: address!,
         recipientAddress,
         token: asset.toUpperCase(),
         amount: tokenAmount,
@@ -417,7 +477,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         note,
       }).catch(() => undefined);
 
-      setTimeout(() => refreshAssets(address), 8000);
+      setTimeout(() => refreshAssets(ownerAddress), 8000);
       return txHash;
     } catch (err: any) {
       console.error('[Particle UA] Transfer transaction failed:', err);
@@ -430,7 +490,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       await new Promise(r => setTimeout(r, 800));
       return;
     }
-    if (!uaInstance || !address) throw new Error('Connect your wallet first.');
+    if (!uaInstance || !ownerAddress) throw new Error('Connect your wallet first.');
     if (typeof window === 'undefined' || !(window as any).ethereum) {
       throw new Error('MetaMask is not available.');
     }
@@ -442,11 +502,11 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
     const transaction = await uaInstance.createTransferTransaction({
       token: { chainId: chainConfig.chainId, address: tokenAddress },
       amount: '0.000001',
-      receiver: address,
+      receiver: ownerAddress,
     });
 
-    const signature = await signRootHash(transaction.rootHash, address);
-    const authorizations = await collectEip7702Authorizations(transaction, address);
+    const signature = await signRootHash(transaction.rootHash, ownerAddress);
+    const authorizations = await collectEip7702Authorizations(transaction, ownerAddress);
     if (authorizations.length) {
       await uaInstance.sendTransaction(transaction, signature, authorizations);
     } else {
@@ -461,6 +521,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       value={{
         isConnected,
         address,
+        ownerAddress,
         balance,
         primaryAssets,
         isUpgrading,
