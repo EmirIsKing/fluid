@@ -130,7 +130,7 @@ function createUaInstance(ownerAddress: string) {
     smartAccountOptions: {
       name: 'UNIVERSAL',
       version: UNIVERSAL_ACCOUNT_VERSION,
-      ownerAddress,
+      ownerAddress: ownerAddress.toLowerCase(),
       useEIP7702: true,
     },
   });
@@ -216,7 +216,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       if (!uaInstance) setUaInstance(ua);
 
       const smartOptions = await ua.getSmartAccountOptions();
-      const smartAccountAddress = smartOptions.smartAccountAddress ?? ownerAddr;
+      const smartAccountAddress = (smartOptions.smartAccountAddress ?? ownerAddr).toLowerCase();
 
       const result = await ua.getPrimaryAssets();
       console.log("[ParticleProvider] refreshAssets Result:", JSON.stringify(result, null, 2));
@@ -247,8 +247,8 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       if (saved) {
         const { address: savedAddress, ownerAddress: savedOwnerAddress, balance: savedBalance, activeChains: savedChains } = JSON.parse(saved);
         setIsConnected(true);
-        setAddress(savedAddress);
-        setOwnerAddress(savedOwnerAddress ?? savedAddress);
+        setAddress(savedAddress.toLowerCase());
+        setOwnerAddress((savedOwnerAddress ?? savedAddress).toLowerCase());
         setBalance(savedBalance);
         setActiveChains(savedChains?.length ? savedChains : SUPPORTED_CHAIN_LABELS);
 
@@ -302,7 +302,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
-      const userAddress = accounts[0];
+      const userAddress = accounts[0].toLowerCase();
       const ua = createUaInstance(userAddress);
       if (ua) setUaInstance(ua);
 
@@ -311,7 +311,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       if (ua) {
         try {
           const smartOptions = await ua.getSmartAccountOptions();
-          smartAccountAddress = smartOptions.smartAccountAddress ?? userAddress;
+          smartAccountAddress = (smartOptions.smartAccountAddress ?? userAddress).toLowerCase();
 
           const result = await ua.getPrimaryAssets();
           console.log("[ParticleProvider] connect Result:", JSON.stringify(result, null, 2));
