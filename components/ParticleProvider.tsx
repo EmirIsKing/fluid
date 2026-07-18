@@ -131,6 +131,7 @@ function createUaInstance(ownerAddress: string) {
       name: 'UNIVERSAL',
       version: UNIVERSAL_ACCOUNT_VERSION,
       ownerAddress,
+      useEIP7702: true,
     },
   });
 }
