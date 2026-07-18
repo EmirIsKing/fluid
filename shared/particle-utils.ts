@@ -137,7 +137,7 @@ export async function signRootHash(
   const message = hexlify(getBytes(rootHash));
   const rawSignature = await ethereum.request({
     method: 'personal_sign',
-    params: [message, ownerAddress],
+    params: [message, ownerAddress.toLowerCase()],
   }) as string;
   
   return Signature.from(rawSignature).serialized;
@@ -161,14 +161,14 @@ export async function collectEip7702Authorizations(
     if (!signature) {
       console.log('[collectEip7702Authorizations] Requesting EIP-7702 auth for:', auth);
       
-      const typedData = buildEip7702TypedData(auth, ownerAddress);
+      const typedData = buildEip7702TypedData(auth, ownerAddress.toLowerCase());
       console.log('[collectEip7702Authorizations] Typed Data:', typedData);
       
       let rawSignature;
       try {
         rawSignature = (await ethereum.request({
           method: 'eth_signTypedData_v4',
-          params: [ownerAddress, typedData],
+          params: [ownerAddress.toLowerCase(), typedData],
         })) as string;
       } catch (err: any) {
         console.error('[collectEip7702Authorizations] eth_signTypedData_v4 failed:', err);
