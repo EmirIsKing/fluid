@@ -1,4 +1,4 @@
-import { getBytes, hexlify, isAddress } from 'ethers';
+import { getBytes, hexlify, isAddress, Signature } from 'ethers';
 import {
   FALLBACK_USD_PRICES,
   STABLE_ASSETS,
@@ -135,10 +135,12 @@ export async function signRootHash(
   if (!ethereum) throw new Error('MetaMask is not connected or installed');
 
   const message = hexlify(getBytes(rootHash));
-  return ethereum.request({
+  const rawSignature = await ethereum.request({
     method: 'personal_sign',
     params: [message, ownerAddress],
-  }) as Promise<string>;
+  }) as string;
+  
+  return Signature.from(rawSignature).serialized;
 }
 
 export async function collectEip7702Authorizations(
@@ -168,6 +170,7 @@ export async function collectEip7702Authorizations(
           params: [hexlify(getBytes(userOp.userOpHash)), ownerAddress],
         })) as string;
       }
+      signature = Signature.from(signature).serialized;
       nonceMap.set(auth.nonce, signature);
     }
 
