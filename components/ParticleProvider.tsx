@@ -218,8 +218,9 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       const smartAccountAddress = smartOptions.smartAccountAddress ?? ownerAddr;
 
       const result = await ua.getPrimaryAssets();
-      console.log("Primary Assets", result);
-      const assets = normalizePrimaryAssets(result?.assets ?? []);
+      console.log("[ParticleProvider] refreshAssets Result:", JSON.stringify(result, null, 2));
+      const rawAssets = Array.isArray(result) ? result : (result?.assets || []);
+      const assets = normalizePrimaryAssets(rawAssets);
       setPrimaryAssets(assets);
       setBalance(sumUsd(assets));
       setAddress(smartAccountAddress);
@@ -312,8 +313,9 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
           smartAccountAddress = smartOptions.smartAccountAddress ?? userAddress;
 
           const result = await ua.getPrimaryAssets();
-          console.log("Primary Assets", result);
-          assets = normalizePrimaryAssets(result?.assets ?? []);
+          console.log("[ParticleProvider] connect Result:", JSON.stringify(result, null, 2));
+          const rawAssets = Array.isArray(result) ? result : (result?.assets || []);
+          assets = normalizePrimaryAssets(rawAssets);
         } catch {
           /* balance may be zero on new accounts */
         }

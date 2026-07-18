@@ -26,7 +26,12 @@ export type RoutePreview = {
 };
 
 export function normalizePrimaryAssets(rawAssets: unknown[]): PrimaryAsset[] {
-  if (!Array.isArray(rawAssets)) return [];
+  console.log('[normalizePrimaryAssets] Input rawAssets:', JSON.stringify(rawAssets, null, 2));
+
+  if (!Array.isArray(rawAssets)) {
+    console.warn('[normalizePrimaryAssets] rawAssets is not an array!');
+    return [];
+  }
   
   const normalized: PrimaryAsset[] = [];
   
@@ -48,7 +53,8 @@ export function normalizePrimaryAssets(rawAssets: unknown[]): PrimaryAsset[] {
         const chainName = chainConfig ? chainConfig.value : 'Unknown';
         const tokenAddress = String(item.token.address ?? '');
         
-        if (parseFloat(amountInUSD) > 0) {
+        // Use token amount instead of just USD value to ensure we don't drop tokens with no USD price
+        if (parseFloat(amount) > 0 || parseFloat(amountInUSD) > 0) {
           normalized.push({
             chainId,
             chainName,
@@ -68,7 +74,7 @@ export function normalizePrimaryAssets(rawAssets: unknown[]): PrimaryAsset[] {
       const chainId = Number(asset.chainId ?? 0);
       const tokenAddress = String(asset.tokenAddress ?? asset.address ?? '');
       
-      if (symbol && parseFloat(amountInUSD) > 0) {
+      if (symbol && (parseFloat(amount) > 0 || parseFloat(amountInUSD) > 0)) {
         normalized.push({
           chainId,
           chainName,
@@ -81,6 +87,7 @@ export function normalizePrimaryAssets(rawAssets: unknown[]): PrimaryAsset[] {
     }
   }
   
+  console.log('[normalizePrimaryAssets] Output normalized:', JSON.stringify(normalized, null, 2));
   return normalized;
 }
 
