@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 // @ts-ignore — SDK ships without bundled types in some installs
-import { UniversalAccount } from '@particle-network/universal-account-sdk';
+import { UniversalAccount, UNIVERSAL_ACCOUNT_VERSION } from '@particle-network/universal-account-sdk';
 import {
   SUPPORTED_CHAIN_LABELS,
   resolveChainConfig,
@@ -122,14 +122,14 @@ function loadStoredTransactions(): Transaction[] {
 }
 
 function createUaInstance(ownerAddress: string) {
-  if (!UniversalAccount || !process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID) return null;
+  if (!UniversalAccount || !process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID || !process.env.NEXT_PUBLIC_PARTICLE_APP_UUID) return null;
   return new UniversalAccount({
     projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
     projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
+    projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
     smartAccountOptions: {
-      projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
-      projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-      projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
+      name: 'UNIVERSAL',
+      version: UNIVERSAL_ACCOUNT_VERSION,
       ownerAddress,
     },
   });
