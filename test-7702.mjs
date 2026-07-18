@@ -8,33 +8,18 @@ async function main() {
     smartAccountOptions: {
       name: 'UNIVERSAL',
       version: '2.0.1',
-      ownerAddress: '0x9965507b1a0595c5411cc4457ed061b402c82f24', // Lowercased
-      useEIP7702: true
+      ownerAddress: '0x9965507b1a0595c5411cc4457ed061b402c82f24',
+      useEIP7702: false // Set to false to see what options and assets are returned
     }
   });
-
-  const originalRequest = ua.request;
-  ua.request = async (method, params) => {
-    console.log('--- INTERCEPTED REQUEST ---');
-    console.log('Method:', method);
-    console.log('Params:', JSON.stringify(params, null, 2));
-    try {
-      const res = await originalRequest.call(ua, method, params);
-      console.log('Result:', JSON.stringify(res, null, 2));
-      return res;
-    } catch (err) {
-      console.error('Request failed:', err);
-      throw err;
-    }
-  };
 
   console.log('Fetching smart account options...');
   const options = await ua.getSmartAccountOptions();
   console.log('Smart Account Options:', options);
 
-  console.log('Calling getEIP7702Auth...');
-  const auth = await ua.getEIP7702Auth([8453]);
-  console.log('getEIP7702Auth Result:', JSON.stringify(auth, null, 2));
+  console.log('Fetching primary assets...');
+  const assets = await ua.getPrimaryAssets();
+  console.log('Primary Assets:', JSON.stringify(assets, null, 2));
 }
 
 main().catch(err => console.error('Error in main:', err));
