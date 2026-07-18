@@ -442,6 +442,22 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
 
     if (!uaInstance) throw new Error('Universal Account is not initialized.');
 
+    // Switch network to prevent eth_signTypedData_v4 from failing due to chainId mismatch
+    const currentChainIdHex = await (window as any).ethereum.request({ method: 'eth_chainId' });
+    const targetChainIdHex = '0x' + chainConfig.chainId.toString(16);
+    if (currentChainIdHex !== targetChainIdHex) {
+      try {
+        await (window as any).ethereum.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: targetChainIdHex }],
+        });
+      } catch (switchError: any) {
+        // If the chain is not added, we should ideally add it. But for now, we'll just log and proceed.
+        console.error('Failed to switch network in MetaMask:', switchError);
+        throw new Error('Please switch to the correct network in MetaMask to send this transaction.');
+      }
+    }
+
     const tokenAddress = resolveTokenAddress(chainConfig.value, asset);
 
     try {

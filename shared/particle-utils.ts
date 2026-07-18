@@ -159,18 +159,23 @@ export async function collectEip7702Authorizations(
     let signature = nonceMap.get(auth.nonce);
 
     if (!signature) {
+      console.log('[collectEip7702Authorizations] Requesting EIP-7702 auth for:', auth);
+      
+      const typedData = buildEip7702TypedData(auth, ownerAddress);
+      console.log('[collectEip7702Authorizations] Typed Data:', typedData);
+      
+      let rawSignature;
       try {
-        signature = (await ethereum.request({
+        rawSignature = (await ethereum.request({
           method: 'eth_signTypedData_v4',
-          params: [ownerAddress, buildEip7702TypedData(auth, ownerAddress)],
+          params: [ownerAddress, typedData],
         })) as string;
-      } catch {
-        signature = (await ethereum.request({
-          method: 'personal_sign',
-          params: [hexlify(getBytes(userOp.userOpHash)), ownerAddress],
-        })) as string;
+      } catch (err: any) {
+        console.error('[collectEip7702Authorizations] eth_signTypedData_v4 failed:', err);
+        throw new Error(`Failed to sign EIP-7702 authorization: ${err?.message || 'Unknown error'}`);
       }
-      signature = Signature.from(signature).serialized;
+
+      signature = Signature.from(rawSignature).serialized;
       nonceMap.set(auth.nonce, signature);
     }
 
