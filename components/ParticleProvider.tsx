@@ -433,6 +433,13 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === 'undefined' || !(window as any).ethereum || !ownerAddress) {
       throw new Error('MetaMask is not connected or installed');
     }
+    
+    // Ensure the wallet is still connected and the active account matches the ownerAddress
+    const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
+    if (!accounts || accounts.length === 0 || accounts[0].toLowerCase() !== ownerAddress.toLowerCase()) {
+      throw new Error(`Please switch to account ${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)} in MetaMask, or reconnect.`);
+    }
+
     if (!uaInstance) throw new Error('Universal Account is not initialized.');
 
     const tokenAddress = resolveTokenAddress(chainConfig.value, asset);
