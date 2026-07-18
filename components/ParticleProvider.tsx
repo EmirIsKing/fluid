@@ -179,7 +179,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
     if (savedDemo) {
       try {
         currentDemoAssets = JSON.parse(savedDemo);
-      } catch {}
+      } catch { }
     }
     const demoBalance = sumUsd(currentDemoAssets);
     setIsConnected(true);
@@ -201,7 +201,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       if (savedDemo) {
         try {
           currentDemoAssets = JSON.parse(savedDemo);
-        } catch {}
+        } catch { }
       }
       setPrimaryAssets(currentDemoAssets);
       setBalance(sumUsd(currentDemoAssets));
@@ -218,6 +218,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       const smartAccountAddress = smartOptions.smartAccountAddress ?? ownerAddr;
 
       const result = await ua.getPrimaryAssets();
+      console.log("Primary Assets", result);
       const assets = normalizePrimaryAssets(result?.assets ?? []);
       setPrimaryAssets(assets);
       setBalance(sumUsd(assets));
@@ -309,8 +310,9 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         try {
           const smartOptions = await ua.getSmartAccountOptions();
           smartAccountAddress = smartOptions.smartAccountAddress ?? userAddress;
-          
+
           const result = await ua.getPrimaryAssets();
+          console.log("Primary Assets", result);
           assets = normalizePrimaryAssets(result?.assets ?? []);
         } catch {
           /* balance may be zero on new accounts */
