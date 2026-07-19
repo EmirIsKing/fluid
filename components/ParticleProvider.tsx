@@ -1,6 +1,6 @@
 'use client';
 
-import { getBytes } from 'ethers';
+import { getBytes, verifyMessage } from 'ethers';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 // @ts-ignore — SDK ships without bundled types in some installs
 import { UniversalAccount, UNIVERSAL_ACCOUNT_VERSION, CHAIN_ID, } from '@particle-network/universal-account-sdk';
@@ -134,6 +134,13 @@ function createUaInstance(ownerAddress: string) {
     ownerAddress: ownerAddress.toLowerCase(),
     tradeConfig: {
       slippageBps: 100,      // 1% slippage tolerance
+      universalGas: true,     // pay gas in PARTI where possible
+    },
+    smartAccountOptions: {
+      name: 'UNIVERSAL',
+      version: UNIVERSAL_ACCOUNT_VERSION,
+      ownerAddress: ownerAddress.toLowerCase(),
+      useEIP7702: true,
     },
   });
 }
@@ -276,7 +283,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       const smartAccountAddress = (smartOptions.smartAccountAddress ?? ownerAddr).toLowerCase();
 
       const result = await ua.getPrimaryAssets();
-      console.log("[ParticleProvider] refreshAssets Result:", JSON.stringify(result, null, 2));
+      // console.log("[ParticleProvider] refreshAssets Result:", JSON.stringify(result, null, 2));
       const rawAssets = Array.isArray(result) ? result : (result?.assets || []);
       const assets = normalizePrimaryAssets(rawAssets);
       setPrimaryAssets(assets);
@@ -491,9 +498,13 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       });
 
 
+      console.log("transaction ", transaction);
 
       const signature = await signHash(transaction.rootHash);
       console.log("signature", signature);
+      const recovered = verifyMessage(getBytes(transaction.rootHash), signature);
+      console.log("Recovered signer:", recovered);
+      console.log("Expected owner:", ownerAddress);
       const result = await uaInstance.sendTransaction(transaction, signature);
       console.log("[ParticleProvider] sendTransaction Result:", result);
 

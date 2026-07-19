@@ -28,7 +28,7 @@ export type RoutePreview = {
 };
 
 export function normalizePrimaryAssets(rawAssets: unknown[]): PrimaryAsset[] {
-  console.log('[normalizePrimaryAssets] Input rawAssets:', JSON.stringify(rawAssets, null, 2));
+  //console.log('[normalizePrimaryAssets] Input rawAssets:', JSON.stringify(rawAssets, null, 2));
 
   if (!Array.isArray(rawAssets)) {
     console.warn('[normalizePrimaryAssets] rawAssets is not an array!');
