@@ -6,7 +6,7 @@ import {
   type SupportedAsset,
   usdToTokenAmount,
 } from '@shared/chains';
-import { useWallets } from '@particle-network/connectkit';
+import { useSignMessage, useWallets } from '@privy-io/react-auth';
 
 
 export type PrimaryAsset = {
@@ -133,29 +133,20 @@ export function estimateRoutePreview(
 import { hexToBytes, type Hex } from 'viem';
 
 export function useSignRootHash() {
-  const [primaryWallet] = useWallets();
+  const { signMessage } = useSignMessage();
+  const { wallets } = useWallets();
 
   // Accept a verified Hex string (0x...) or a raw message string
   return async (messageHex: string): Promise<string> => {
-    if (!primaryWallet) {
-      throw new Error('No wallet instance found');
-    }
-
-    const walletClient = primaryWallet.getWalletClient();
-    const accountAddress = primaryWallet.accounts[0];
-
-    if (!walletClient || !accountAddress) {
+    const activeWallet = wallets[0];
+    if (!activeWallet) {
       throw new Error('No wallet connected');
     }
 
-    // 1. Convert the hex string hash into a raw byte array (equivalent to ethers' getBytes)
-    const rawBytes = hexToBytes(messageHex as Hex);
-
-    // 2. Pass the byte array explicitly into the message field
-    const signature = await walletClient.signMessage({
-      account: accountAddress as `0x${string}`,
-      message: { raw: rawBytes }, // Viem natively accepts Uint8Array raw bytes here
-    });
+    const { signature } = await signMessage(
+      { message: messageHex },
+      { address: activeWallet.address }
+    );
 
     return signature;
   };

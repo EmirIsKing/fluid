@@ -1,22 +1,11 @@
 "use client";
 
-import { ConnectKitProvider, createConfig } from "@particle-network/connectkit";
-import { authWalletConnectors } from "@particle-network/connectkit/auth";
-import { evmWalletConnectors } from "@particle-network/connectkit/evm";
+import { PrivyProvider } from "@privy-io/react-auth";
 import { mainnet, base, arbitrum, bsc, xLayer } from "viem/chains";
 import '../src/styles.css';
 import Providers from './providers';
 
-const config = createConfig({
-  projectId: process.env.NEXT_PUBLIC_PROJECT_ID || process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID!,
-  clientKey: process.env.NEXT_PUBLIC_CLIENT_KEY || process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY!,
-  appId: process.env.NEXT_PUBLIC_APP_ID || process.env.NEXT_PUBLIC_PARTICLE_APP_UUID!,
-  chains: [mainnet, base, arbitrum, bsc, xLayer],
-  walletConnectors: [
-    authWalletConnectors(),
-    evmWalletConnectors(),
-  ],
-});
+const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || "";
 
 export default function RootLayout({
   children,
@@ -31,9 +20,23 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital,wght@0,400;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
       </head>
       <body>
-        <ConnectKitProvider config={config}>
+        <PrivyProvider
+          appId={privyAppId}
+          config={{
+            appearance: {
+              theme: 'dark',
+              accentColor: '#676FFF',
+            },
+            embeddedWallets: {
+              ethereum: {
+                createOnLogin: 'users-without-wallets',
+              },
+            },
+            supportedChains: [mainnet, base, arbitrum, bsc, xLayer],
+          }}
+        >
           <Providers>{children}</Providers>
-        </ConnectKitProvider>
+        </PrivyProvider>
       </body>
     </html>
   );

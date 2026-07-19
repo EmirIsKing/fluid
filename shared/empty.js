@@ -13,6 +13,9 @@ export const spawn = () => {};
 export class ReadStream {}
 export const fstatSync = () => ({ size: 0 });
 export const lstatSync = () => ({ size: 0 });
+export const statSync = () => ({ size: 0 });
+export const createReadStream = () => {};
+export const isIP = () => 0;
 
 export default {
   promises,
@@ -25,4 +28,7 @@ export default {
   ReadStream,
   fstatSync,
   lstatSync,
+  statSync,
+  createReadStream,
+  isIP,
 };

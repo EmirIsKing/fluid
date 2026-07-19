@@ -1,6 +1,6 @@
 'use client';
 
-import { getBytes, verifyMessage } from 'ethers';
+import { getBytes, verifyMessage, Signature } from 'ethers';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 // @ts-ignore — SDK ships without bundled types in some installs
 import { UniversalAccount, UNIVERSAL_ACCOUNT_VERSION, CHAIN_ID, } from '@particle-network/universal-account-sdk';
@@ -16,7 +16,6 @@ import {
 import {
   normalizePrimaryAssets,
   signRootHash,
-  collectEip7702Authorizations,
   validateRecipientAddress,
   estimateRoutePreview,
   getAssetUsdPrice,
@@ -25,7 +24,7 @@ import {
   useSignRootHash,
 } from '@shared/particle-utils';
 import { recordSendByWallet } from '@/app/actions/transactions';
-import { useAccount, useDisconnect, useModal, useWallets, useConnectors } from '@particle-network/connectkit';
+import { usePrivy, useWallets, useSign7702Authorization } from '@privy-io/react-auth';
 
 export type { PrimaryAsset } from '@shared/particle-utils';
 
@@ -130,15 +129,11 @@ function createUaInstance(ownerAddress: string) {
   return new UniversalAccount({
     projectId: projId,
     projectClientKey: clientKey,
-    projectAppUuid: appId,
     ownerAddress: ownerAddress.toLowerCase(),
     tradeConfig: {
       slippageBps: 100,      // 1% slippage tolerance
-      universalGas: true,     // pay gas in PARTI where possible
     },
     smartAccountOptions: {
-      name: 'UNIVERSAL',
-      version: UNIVERSAL_ACCOUNT_VERSION,
       ownerAddress: ownerAddress.toLowerCase(),
       useEIP7702: true,
     },
@@ -153,12 +148,10 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
     process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
   );
 
-  const { address: ethAddress, connector: accountConnector, status: accountStatus } = useAccount();
-  const { setOpen } = useModal();
-  const { disconnect: authKitDisconnect } = useDisconnect();
-  const wallets = useWallets();
-  const primaryWallet = wallets[0];
-  const allConnectors = useConnectors();
+  const { login, logout, authenticated, ready, user } = usePrivy();
+  const { wallets } = useWallets();
+  const activeWallet = wallets[0];
+  const { signAuthorization } = useSign7702Authorization();
 
   const [isConnected, setIsConnected] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
@@ -181,42 +174,35 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(TX_STORAGE_KEY, JSON.stringify(txs));
   }, []);
 
-  // Synchronize loading/initialization status from ConnectKit
+  // Synchronize loading/initialization status from Privy
   useEffect(() => {
     if (mode === 'live') {
-      if (accountStatus !== 'connecting' && accountStatus !== 'reconnecting') {
+      if (ready) {
         setIsInitializing(false);
       }
     } else {
       setIsInitializing(false);
     }
-  }, [accountStatus, mode]);
+  }, [ready, mode]);
 
-  // Synchronize credentials and active UniversalAccount instances when ConnectKit updates
+  // Synchronize credentials and active UniversalAccount instances when Privy updates
   useEffect(() => {
     if (mode === 'live') {
-      const activeConnector = primaryWallet?.connector ?? accountConnector;
-      const realConnector = allConnectors.find(c => c.uid === activeConnector?.uid || c.id === activeConnector?.id);
+      if (authenticated && activeWallet) {
+        activeWallet.getEthereumProvider().then((provider) => {
+          (window as any).ethereum = provider;
+          const ownerAddr = activeWallet.address.toLowerCase();
+          setOwnerAddress(ownerAddr);
+          setIsConnected(true);
 
-      if (ethAddress && realConnector) {
-        if (typeof realConnector.getProvider === 'function') {
-          realConnector.getProvider().then((provider) => {
-            (window as any).ethereum = provider;
-            const ownerAddr = ethAddress.toLowerCase();
-            setOwnerAddress(ownerAddr);
-            setIsConnected(true);
-
-            const ua = createUaInstance(ownerAddr);
-            if (ua) {
-              setUaInstance(ua);
-            }
-          }).catch((err) => {
-            console.error('[ParticleProvider] failed to get EIP-1193 provider:', err);
-          });
-        } else {
-          console.warn("[ParticleProvider] realConnector.getProvider is not a function! Keys:", Object.keys(realConnector));
-        }
-      } else if (accountStatus === 'disconnected' || !ethAddress) {
+          const ua = createUaInstance(ownerAddr);
+          if (ua) {
+            setUaInstance(ua);
+          }
+        }).catch((err) => {
+          console.error('[ParticleProvider] failed to get EIP-1193 provider from Privy:', err);
+        });
+      } else if (ready && !authenticated) {
         setIsConnected(false);
         setAddress(null);
         setOwnerAddress(null);
@@ -226,7 +212,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         setActiveChains(SUPPORTED_CHAIN_LABELS);
       }
     }
-  }, [ethAddress, accountConnector, primaryWallet, allConnectors, accountStatus, mode]);
+  }, [authenticated, activeWallet, ready, mode]);
 
   const setMode = (newMode: 'demo' | 'live') => {
     if (newMode === 'live' && !particleConfigured) {
@@ -354,10 +340,10 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      setOpen(true);
+      await login();
     } catch (e) {
-      console.error('Particle ConnectKit modal failed to open', e);
-      alert('Failed to open connection modal.');
+      console.error('Privy login failed', e);
+      alert('Failed to connect wallet.');
     } finally {
       setIsUpgrading(false);
     }
@@ -374,7 +360,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       setActiveChains(SUPPORTED_CHAIN_LABELS);
       localStorage.removeItem(STORAGE_KEY);
     } else {
-      authKitDisconnect();
+      logout();
     }
   };
 
@@ -397,16 +383,12 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
 
 
   const signHash = useSignRootHash();
-
   const delegateChain = async (chainId: number, chainName: string) => {
     if (mode === 'demo') {
       await new Promise(r => setTimeout(r, 800));
       return;
     }
     if (!uaInstance || !ownerAddress) throw new Error('Connect your wallet first.');
-    if (typeof window === 'undefined' || !(window as any).ethereum) {
-      throw new Error('MetaMask is not available.');
-    }
 
     const chainConfig = SUPPORTED_CHAIN_LABELS.map(resolveChainConfig).find(c => c.chainId === chainId);
     if (!chainConfig) throw new Error('Unsupported chain.');
@@ -418,16 +400,25 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       receiver: ownerAddress,
     });
 
-    //const signature = await signRootHash(transaction.rootHash, ownerAddress);
-    const signature = signHash(transaction.rootHash);
+    const signature = await signHash(transaction.rootHash);
     console.log('Signature:', signature);
 
-    const authorizations = await collectEip7702Authorizations(transaction, ownerAddress);
-    if (authorizations.length) {
-      await uaInstance.sendTransaction(transaction, signature, authorizations);
-    } else {
-      await uaInstance.sendTransaction(transaction, signature);
+    const authorizations: any[] = [];
+    if (transaction.userOps?.length) {
+      for (const userOp of transaction.userOps) {
+        if (userOp.eip7702Auth && !userOp.eip7702Delegated) {
+          const auth = await signAuthorization({
+            contractAddress: userOp.eip7702Auth.address,
+            chainId: userOp.eip7702Auth.chainId,
+            nonce: userOp.eip7702Auth.nonce,
+          });
+          const sig = Signature.from({ r: auth.r, s: auth.s, yParity: auth.yParity as 0 | 1 });
+          authorizations.push({ userOpHash: userOp.userOpHash, signature: sig.serialized });
+        }
+      }
     }
+
+    await uaInstance.sendTransaction(transaction, signature, authorizations);
 
     console.info(`EIP-7702 authorization completed for ${chainName}`);
   };
@@ -505,7 +496,23 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       const recovered = verifyMessage(getBytes(transaction.rootHash), signature);
       console.log("Recovered signer:", recovered);
       console.log("Expected owner:", ownerAddress);
-      const result = await uaInstance.sendTransaction(transaction, signature);
+
+      const authorizations: any[] = [];
+      if (transaction.userOps?.length) {
+        for (const userOp of transaction.userOps) {
+          if (userOp.eip7702Auth && !userOp.eip7702Delegated) {
+            const auth = await signAuthorization({
+              contractAddress: userOp.eip7702Auth.address,
+              chainId: userOp.eip7702Auth.chainId,
+              nonce: userOp.eip7702Auth.nonce,
+            });
+            const sig = Signature.from({ r: auth.r, s: auth.s, yParity: auth.yParity as 0 | 1 });
+            authorizations.push({ userOpHash: userOp.userOpHash, signature: sig.serialized });
+          }
+        }
+      }
+
+      const result = await uaInstance.sendTransaction(transaction, signature, authorizations);
       console.log("[ParticleProvider] sendTransaction Result:", result);
 
       const tx: Transaction = {
