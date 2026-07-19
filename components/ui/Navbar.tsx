@@ -27,11 +27,11 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-8">
             <a href="#features" style={{ color: 'var(--text-muted)' }} className="text-sm hover:text-white transition-colors">Features</a>
             <a href="#chains" style={{ color: 'var(--text-muted)' }} className="text-sm hover:text-white transition-colors">Chains</a>
-            <a href="/dashboard" style={{ color: 'var(--text-muted)' }} className="text-sm hover:text-white transition-colors">Dashboard</a>
+            <a href="/overview" style={{ color: 'var(--text-muted)' }} className="text-sm hover:text-white transition-colors">Dashboard</a>
             
             {mounted && isConnected ? (
               <Link
-                href="/dashboard"
+                href="/overview"
                 style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
                 className="flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium hover:border-[var(--accent)] transition-all"
               >

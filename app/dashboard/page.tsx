@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParticle } from '@/components/ParticleProvider';
-import { ArrowUpRight, ArrowDownLeft, Plus, Send } from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 
 export default function DashboardPage() {
   const { balance, transactions, contacts, isConnected } = useParticle();
@@ -22,8 +22,10 @@ export default function DashboardPage() {
           </span>
         </div>
         <div className="flex items-center justify-center gap-3 mt-6">
-          <Link href="/dashboard/send" className="btn-accent flex items-center gap-2 px-7 py-3">
-            <Send size={16} /> Send
+          <Link href="/dashboard/send"
+            style={{ background: 'var(--accent)', color: 'white' }}
+            className="flex items-center gap-2 px-7 py-3 rounded-full font-bold hover:opacity-90 transition-opacity">
+            <ArrowUpRight size={16} /> Send
           </Link>
           <Link href="/dashboard/receive"
             style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text)' }}
@@ -55,14 +57,13 @@ export default function DashboardPage() {
         </div>
         <div className="flex gap-4 overflow-x-auto pb-2">
           {contacts.map(c => (
-            <Link key={c.id} href={`/dashboard/send?to=@${c.username}`}
-              className="flex flex-col items-center gap-2 min-w-[64px]">
+            <div key={c.id} className="flex flex-col items-center gap-2 min-w-[64px]">
               <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
-                className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold hover:border-[var(--accent)] transition-colors">
+                className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold">
                 {c.avatar}
               </div>
               <span style={{ color: 'var(--text-muted)' }} className="text-xs">{c.name}</span>
-            </Link>
+            </div>
           ))}
         </div>
       </div>

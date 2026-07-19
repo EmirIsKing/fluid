@@ -52,7 +52,7 @@ export default function Hero() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
             {mounted && isConnected ? (
-              <a href="/dashboard" className="btn-accent px-10 py-4 text-lg">
+              <a href="/overview" className="btn-accent px-10 py-4 text-lg">
                 Open Dashboard →
               </a>
             ) : (

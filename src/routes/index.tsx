@@ -12,6 +12,7 @@ import {
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { useParticle, type Transaction } from '@/components/ParticleProvider';
 import { resolveChainConfig } from '@shared/chains';
+import { Link } from './router-mock';
 
 export const head = () => ({
   title: 'Fluid — One address for every network',
@@ -338,6 +339,22 @@ export default function Overview() {
                   <span className="text-xs text-[var(--muted-foreground)]">Particle UA balance</span>
                 </div>
               )}
+            </div>
+
+            {/* Quick Action Buttons */}
+            <div className="flex gap-2.5 pt-2">
+              <Link
+                to="/send"
+                className="flex-grow flex items-center justify-center gap-1.5 px-3 py-2 bg-[var(--primary)] text-[var(--primary-foreground)] hover:opacity-90 rounded-[var(--radius)] text-xs font-semibold shadow-soft transition-all active:scale-[0.98]"
+              >
+                <ArrowUpRight size={14} /> Send
+              </Link>
+              <Link
+                to="/inbound"
+                className="flex-grow flex items-center justify-center gap-1.5 px-3 py-2 bg-[var(--background)] border border-[var(--border)] text-[var(--foreground)] hover:bg-[var(--border)] rounded-[var(--radius)] text-xs font-semibold shadow-soft transition-all active:scale-[0.98]"
+              >
+                <ArrowDownLeft size={14} /> Receive
+              </Link>
             </div>
           </div>
 

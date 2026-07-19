@@ -9,6 +9,8 @@ import {
   resolveTokenAddress,
   isSupportedAssetOnChain,
   usdToTokenAmount,
+  FALLBACK_USD_PRICES,
+  type SupportedAsset,
 } from '@shared/chains';
 import {
   normalizePrimaryAssets,
@@ -21,6 +23,7 @@ import {
   type PrimaryAsset,
 } from '@shared/particle-utils';
 import { recordSendByWallet } from '@/app/actions/transactions';
+import { useAccount, useDisconnect, useModal, useWallets, useConnectors } from '@particle-network/connectkit';
 
 export type { PrimaryAsset } from '@shared/particle-utils';
 
@@ -68,14 +71,8 @@ type ParticleState = {
   disconnect: () => void;
   refreshAssets: () => Promise<void>;
   previewRoute: (usdAmount: number, asset: string, chain: string) => RoutePreview;
-  sendPayment: (
-    to: string,
-    usdAmount: number,
-    asset: string,
-    chain: string,
-    note?: string,
-  ) => Promise<string>;
   delegateChain: (chainId: number, chainName: string) => Promise<void>;
+  send: (receiver: string, amount: string, asset: string, chain: string) => Promise<any>;
 };
 
 const ParticleContext = createContext<ParticleState | undefined>(undefined);
@@ -122,11 +119,20 @@ function loadStoredTransactions(): Transaction[] {
 }
 
 function createUaInstance(ownerAddress: string) {
-  if (!UniversalAccount || !process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID || !process.env.NEXT_PUBLIC_PARTICLE_APP_UUID) return null;
+  const projId = process.env.NEXT_PUBLIC_PROJECT_ID || process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID;
+  const clientKey = process.env.NEXT_PUBLIC_CLIENT_KEY || process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY;
+  const appId = process.env.NEXT_PUBLIC_APP_ID || process.env.NEXT_PUBLIC_PARTICLE_APP_UUID;
+
+  if (!UniversalAccount || !projId || !appId) return null;
   return new UniversalAccount({
-    projectId: process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID,
-    projectClientKey: process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY,
-    projectAppUuid: process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
+    projectId: projId,
+    projectClientKey: clientKey,
+    projectAppUuid: appId,
+    ownerAddress: ownerAddress.toLowerCase(),
+    tradeConfig: {
+      slippageBps: 100,      // 1% slippage tolerance
+      universalGas: true,     // pay gas in PARTI where possible
+    },
     smartAccountOptions: {
       name: 'UNIVERSAL',
       version: UNIVERSAL_ACCOUNT_VERSION,
@@ -136,12 +142,20 @@ function createUaInstance(ownerAddress: string) {
   });
 }
 
+
 export function ParticleProvider({ children }: { children: React.ReactNode }) {
   const particleConfigured = Boolean(
     process.env.NEXT_PUBLIC_PARTICLE_PROJECT_ID &&
     process.env.NEXT_PUBLIC_PARTICLE_CLIENT_KEY &&
     process.env.NEXT_PUBLIC_PARTICLE_APP_UUID,
   );
+
+  const { address: ethAddress, connector: accountConnector, status: accountStatus } = useAccount();
+  const { setOpen } = useModal();
+  const { disconnect: authKitDisconnect } = useDisconnect();
+  const wallets = useWallets();
+  const primaryWallet = wallets[0];
+  const allConnectors = useConnectors();
 
   const [isConnected, setIsConnected] = useState(false);
   const [address, setAddress] = useState<string | null>(null);
@@ -163,6 +177,53 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
   const persistTransactions = useCallback((txs: Transaction[]) => {
     localStorage.setItem(TX_STORAGE_KEY, JSON.stringify(txs));
   }, []);
+
+  // Synchronize loading/initialization status from ConnectKit
+  useEffect(() => {
+    if (mode === 'live') {
+      if (accountStatus !== 'connecting' && accountStatus !== 'reconnecting') {
+        setIsInitializing(false);
+      }
+    } else {
+      setIsInitializing(false);
+    }
+  }, [accountStatus, mode]);
+
+  // Synchronize credentials and active UniversalAccount instances when ConnectKit updates
+  useEffect(() => {
+    if (mode === 'live') {
+      const activeConnector = primaryWallet?.connector ?? accountConnector;
+      const realConnector = allConnectors.find(c => c.uid === activeConnector?.uid || c.id === activeConnector?.id);
+
+      if (ethAddress && realConnector) {
+        if (typeof realConnector.getProvider === 'function') {
+          realConnector.getProvider().then((provider) => {
+            (window as any).ethereum = provider;
+            const ownerAddr = ethAddress.toLowerCase();
+            setOwnerAddress(ownerAddr);
+            setIsConnected(true);
+
+            const ua = createUaInstance(ownerAddr);
+            if (ua) {
+              setUaInstance(ua);
+            }
+          }).catch((err) => {
+            console.error('[ParticleProvider] failed to get EIP-1193 provider:', err);
+          });
+        } else {
+          console.warn("[ParticleProvider] realConnector.getProvider is not a function! Keys:", Object.keys(realConnector));
+        }
+      } else if (accountStatus === 'disconnected' || !ethAddress) {
+        setIsConnected(false);
+        setAddress(null);
+        setOwnerAddress(null);
+        setBalance(0);
+        setPrimaryAssets([]);
+        setUaInstance(null);
+        setActiveChains(SUPPORTED_CHAIN_LABELS);
+      }
+    }
+  }, [ethAddress, accountConnector, primaryWallet, allConnectors, accountStatus, mode]);
 
   const setMode = (newMode: 'demo' | 'live') => {
     if (newMode === 'live' && !particleConfigured) {
@@ -243,17 +304,17 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
 
       setTransactions(loadStoredTransactions());
 
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const { address: savedAddress, ownerAddress: savedOwnerAddress, balance: savedBalance, activeChains: savedChains } = JSON.parse(saved);
-        setIsConnected(true);
-        setAddress(savedAddress.toLowerCase());
-        setOwnerAddress((savedOwnerAddress ?? savedAddress).toLowerCase());
-        setBalance(savedBalance);
-        setActiveChains(savedChains?.length ? savedChains : SUPPORTED_CHAIN_LABELS);
+      const effectiveMode = (savedMode === 'demo' || (!savedMode && !particleConfigured)) ? 'demo' : 'live';
+      if (effectiveMode === 'demo') {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const { address: savedAddress, ownerAddress: savedOwnerAddress, balance: savedBalance, activeChains: savedChains } = JSON.parse(saved);
+          setIsConnected(true);
+          setAddress(savedAddress.toLowerCase());
+          setOwnerAddress((savedOwnerAddress ?? savedAddress).toLowerCase());
+          setBalance(savedBalance);
+          setActiveChains(savedChains?.length ? savedChains : SUPPORTED_CHAIN_LABELS);
 
-        const effectiveMode = savedMode === 'demo' ? 'demo' : mode;
-        if (effectiveMode === 'demo') {
           const savedDemo = localStorage.getItem('onepay_demo_assets');
           if (savedDemo) {
             try {
@@ -264,15 +325,10 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
           } else {
             setPrimaryAssets(DEMO_ASSETS);
           }
-        } else if (savedOwnerAddress || savedAddress) {
-          const ua = createUaInstance(savedOwnerAddress ?? savedAddress);
-          if (ua) setUaInstance(ua);
         }
       }
     } catch {
       /* ignore corrupt storage */
-    } finally {
-      setIsInitializing(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -285,7 +341,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isConnected, ownerAddress, refreshAssets]);
 
-  const connect = async (_walletType: string) => {
+  const connect = async (walletType: string) => {
     setIsUpgrading(true);
 
     if (mode === 'demo') {
@@ -294,60 +350,29 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (typeof window === 'undefined' || !(window as any).ethereum) {
-      setIsUpgrading(false);
-      alert('MetaMask is not installed.');
-      return;
-    }
-
     try {
-      const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
-      const userAddress = accounts[0].toLowerCase();
-      const ua = createUaInstance(userAddress);
-      if (ua) setUaInstance(ua);
-
-      let assets: PrimaryAsset[] = [];
-      let smartAccountAddress = userAddress;
-      if (ua) {
-        try {
-          const smartOptions = await ua.getSmartAccountOptions();
-          smartAccountAddress = (smartOptions.smartAccountAddress ?? userAddress).toLowerCase();
-
-          const result = await ua.getPrimaryAssets();
-          console.log("[ParticleProvider] connect Result:", JSON.stringify(result, null, 2));
-          const rawAssets = Array.isArray(result) ? result : (result?.assets || []);
-          assets = normalizePrimaryAssets(rawAssets);
-        } catch {
-          /* balance may be zero on new accounts */
-        }
-      }
-
-      const total = sumUsd(assets);
-      const chains = chainsFromAssets(assets);
-      setIsConnected(true);
-      setAddress(smartAccountAddress);
-      setOwnerAddress(userAddress);
-      setBalance(total);
-      setPrimaryAssets(assets);
-      setActiveChains(chains);
-      persistWallet({ address: smartAccountAddress, ownerAddress: userAddress, balance: total, activeChains: chains });
+      setOpen(true);
     } catch (e) {
-      console.error('MetaMask/UniversalAccount connection failed', e);
-      alert('Failed to connect to MetaMask.');
+      console.error('Particle ConnectKit modal failed to open', e);
+      alert('Failed to open connection modal.');
     } finally {
       setIsUpgrading(false);
     }
   };
 
   const disconnect = () => {
-    setIsConnected(false);
-    setAddress(null);
-    setOwnerAddress(null);
-    setBalance(0);
-    setPrimaryAssets([]);
-    setUaInstance(null);
-    setActiveChains(SUPPORTED_CHAIN_LABELS);
-    localStorage.removeItem(STORAGE_KEY);
+    if (mode === 'demo') {
+      setIsConnected(false);
+      setAddress(null);
+      setOwnerAddress(null);
+      setBalance(0);
+      setPrimaryAssets([]);
+      setUaInstance(null);
+      setActiveChains(SUPPORTED_CHAIN_LABELS);
+      localStorage.removeItem(STORAGE_KEY);
+    } else {
+      authKitDisconnect();
+    }
   };
 
   const previewRoute = useCallback(
@@ -367,132 +392,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
     [persistTransactions],
   );
 
-  const sendPayment = async (
-    to: string,
-    usdAmount: number,
-    asset: string,
-    chain: string,
-    note?: string,
-  ): Promise<string> => {
-    if (usdAmount <= 0) throw new Error('Amount must be greater than zero.');
-    if (usdAmount > balance) throw new Error('Amount exceeds your unified balance.');
 
-    const chainConfig = resolveChainConfig(chain);
-    if (!isSupportedAssetOnChain(chainConfig.value, asset)) {
-      throw new Error(`${asset} is not available on ${chainConfig.label}.`);
-    }
-
-    const resolved = resolveRecipient(to, contacts);
-    const recipientAddress = validateRecipientAddress(to, resolved?.address);
-
-    const route = previewRoute(usdAmount, asset, chainConfig.value);
-    const tokenAmount = route.tokenAmount;
-
-    if (mode === 'demo') {
-      await new Promise(r => setTimeout(r, 1200));
-      const txHash = `demo-${Date.now().toString(16)}`;
-
-      // Deduct from demo assets
-      const nextAssets = primaryAssets.map(a => {
-        if (a.symbol === route.sourceAsset && a.chainName === route.sourceChain) {
-          const currentUsd = parseFloat(a.amountInUSD) || 0;
-          const price = getAssetUsdPrice(a);
-          const nextUsd = Math.max(0, currentUsd - usdAmount);
-          const nextAmount = (nextUsd / price).toFixed(6).replace(/\.?0+$/, '') || '0';
-          return {
-            ...a,
-            amount: nextAmount,
-            amountInUSD: nextUsd.toFixed(2),
-          };
-        }
-        return a;
-      });
-      setPrimaryAssets(nextAssets);
-      const nextTotal = sumUsd(nextAssets);
-      setBalance(nextTotal);
-      persistWallet({ address: DEMO_ADDRESS, ownerAddress: DEMO_ADDRESS, balance: nextTotal, activeChains: chainsFromAssets(nextAssets) });
-      localStorage.setItem('onepay_demo_assets', JSON.stringify(nextAssets));
-
-      appendTransaction({
-        id: 'tx' + Date.now(),
-        type: 'sent',
-        amount: usdAmount,
-        asset: asset.toUpperCase(),
-        chain: chainConfig.label,
-        sourceAsset: route.sourceAsset,
-        sourceChain: route.sourceChain,
-        toName: resolved?.name ?? recipientAddress.slice(0, 8),
-        to: recipientAddress,
-        date: 'Just now',
-        status: 'completed',
-        txHash,
-      });
-      return txHash;
-    }
-
-    if (typeof window === 'undefined' || !(window as any).ethereum || !ownerAddress) {
-      throw new Error('MetaMask is not connected or installed');
-    }
-    
-    // Ensure the wallet is still connected and the active account matches the ownerAddress
-    const accounts = await (window as any).ethereum.request({ method: 'eth_requestAccounts' });
-    if (!accounts || accounts.length === 0 || accounts[0].toLowerCase() !== ownerAddress.toLowerCase()) {
-      throw new Error(`Please switch to account ${ownerAddress.slice(0, 6)}...${ownerAddress.slice(-4)} in MetaMask, or reconnect.`);
-    }
-
-    if (!uaInstance) throw new Error('Universal Account is not initialized.');
-
-    const tokenAddress = resolveTokenAddress(chainConfig.value, asset);
-
-    try {
-      const transaction = await uaInstance.createTransferTransaction({
-        token: {
-          chainId: chainConfig.chainId,
-          address: tokenAddress,
-        },
-        amount: tokenAmount,
-        receiver: recipientAddress,
-      });
-
-      const signature = await signRootHash(transaction.rootHash, ownerAddress);
-
-      const result = await uaInstance.sendTransaction(transaction, signature);
-
-      const txHash = result.transactionId ?? result.txHash ?? String(result);
-
-      appendTransaction({
-        id: 'tx' + Date.now(),
-        type: 'sent',
-        amount: usdAmount,
-        asset: asset.toUpperCase(),
-        chain: chainConfig.label,
-        sourceAsset: route.sourceAsset,
-        sourceChain: route.sourceChain,
-        toName: resolved?.name ?? recipientAddress.slice(0, 8),
-        to: recipientAddress,
-        date: 'Just now',
-        status: 'completed',
-        txHash,
-      });
-
-      recordSendByWallet({
-        senderAddress: address!,
-        recipientAddress,
-        token: asset.toUpperCase(),
-        amount: tokenAmount,
-        sourceChain: route.sourceChain,
-        destinationChain: chainConfig.label,
-        transactionHash: txHash,
-        note,
-      }).catch(() => undefined);
-
-      setTimeout(() => refreshAssets(ownerAddress), 8000);
-      return txHash;
-    } catch (err: any) {
-      console.error('[Particle UA] Transfer transaction failed:', err);
-      throw new Error(err.message || 'Transfer failed');
-    }
-  };
 
   const delegateChain = async (chainId: number, chainName: string) => {
     if (mode === 'demo') {
@@ -525,6 +425,104 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
     console.info(`EIP-7702 authorization completed for ${chainName}`);
   };
 
+  const send = async (receiver: string, amount: string, asset: string, chain: string): Promise<any> => {
+    if (mode === 'demo') {
+      await new Promise(r => setTimeout(r, 1500));
+      const tx: Transaction = {
+        id: Math.random().toString(36).substring(7),
+        type: 'sent',
+        amount: parseFloat(amount),
+        asset,
+        chain,
+        toName: receiver.startsWith('0x') ? `${receiver.slice(0, 6)}...${receiver.slice(-4)}` : receiver,
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        status: 'completed',
+      };
+      appendTransaction(tx);
+
+      const savedDemo = localStorage.getItem('onepay_demo_assets');
+      let currentDemoAssets = DEMO_ASSETS;
+      if (savedDemo) {
+        try {
+          currentDemoAssets = JSON.parse(savedDemo);
+        } catch { }
+      }
+      const updatedAssets = currentDemoAssets.map(a => {
+        if (a.symbol === asset && resolveChainConfig(a.chainName).label === chain) {
+          const newAmt = Math.max(0, parseFloat(a.amount) - parseFloat(amount));
+          return {
+            ...a,
+            amount: newAmt.toString(),
+            amountInUSD: (newAmt * (FALLBACK_USD_PRICES[asset as SupportedAsset] || 1)).toString()
+          };
+        }
+        return a;
+      });
+      localStorage.setItem('onepay_demo_assets', JSON.stringify(updatedAssets));
+      setPrimaryAssets(updatedAssets);
+      setBalance(sumUsd(updatedAssets));
+      return { transactionId: tx.id };
+    }
+
+    if (!uaInstance || !ownerAddress) {
+      throw new Error('Wallet not connected.');
+    }
+
+    try {
+      const destinationChain = resolveChainConfig(chain);
+      const tokenAddress = resolveTokenAddress(destinationChain.value, asset);
+
+      console.log("[ParticleProvider] Creating transfer transaction:", {
+        chainId: destinationChain.chainId,
+        tokenAddress,
+        amount,
+        receiver,
+      });
+
+      const transaction = await uaInstance.createTransferTransaction({
+        token: {
+          chainId: destinationChain.chainId,
+          address: tokenAddress,
+        },
+        amount,
+        receiver,
+      });
+
+      const signature = await signRootHash(transaction.rootHash, ownerAddress);
+      const result = await uaInstance.sendTransaction(transaction, signature);
+      console.log("[ParticleProvider] sendTransaction Result:", result);
+
+      const tx: Transaction = {
+        id: result.transactionId,
+        type: 'sent',
+        amount: parseFloat(amount),
+        asset,
+        chain,
+        toName: receiver.startsWith('0x') ? `${receiver.slice(0, 6)}...${receiver.slice(-4)}` : receiver,
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        status: 'completed',
+      };
+      appendTransaction(tx);
+      const route = estimateRoutePreview(primaryAssets, (parseFloat(amount) || 0) * (FALLBACK_USD_PRICES[asset as SupportedAsset] || 1), asset, chain);
+      await recordSendByWallet({
+        senderAddress: ownerAddress,
+        recipientAddress: receiver,
+        token: asset,
+        amount: amount,
+        sourceChain: route.sourceChain,
+        destinationChain: chain,
+        transactionHash: result.transactionId,
+      });
+
+      setTimeout(() => refreshAssets(ownerAddress), 2000);
+
+      return result;
+    } catch (error: any) {
+      console.error("[ParticleProvider] send error:", error);
+      throw error;
+    }
+  };
+
   return (
     <ParticleContext.Provider
       value={{
@@ -545,8 +543,8 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         disconnect,
         refreshAssets,
         previewRoute,
-        sendPayment,
         delegateChain,
+        send,
       }}
     >
       {children}

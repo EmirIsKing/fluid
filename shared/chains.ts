@@ -141,6 +141,7 @@ export function usdToTokenAmount(
   asset: string,
   priceUsd?: number,
 ): string {
+  if (usdAmount <= 0) return '0';
   const price = priceUsd && priceUsd > 0
     ? priceUsd
     : FALLBACK_USD_PRICES[asset.toUpperCase() as SupportedAsset] ?? 1;

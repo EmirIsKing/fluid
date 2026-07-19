@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useParticle } from '@/components/ParticleProvider';
 import { Search, Star } from 'lucide-react';
 
@@ -38,14 +37,13 @@ export default function ContactsPage() {
         </div>
         <div className="flex gap-4 overflow-x-auto pb-2">
           {contacts.slice(0, 3).map(c => (
-            <Link key={c.id} href={`/dashboard/send?to=@${c.username}`}
-              className="flex flex-col items-center gap-2 min-w-[72px]">
+            <div key={c.id} className="flex flex-col items-center gap-2 min-w-[72px]">
               <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--accent)' }}
-                className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold hover:scale-105 transition-transform">
+                className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold">
                 {c.avatar}
               </div>
               <span className="text-xs text-center">{c.name}</span>
-            </Link>
+            </div>
           ))}
         </div>
       </div>
@@ -64,9 +62,6 @@ export default function ContactsPage() {
                 <p className="font-semibold">{c.name}</p>
                 <p style={{ color: 'var(--text-muted)' }} className="text-xs">@{c.username} · prefers {c.preferred.asset} on {c.preferred.chain}</p>
               </div>
-              <Link href={`/dashboard/send?to=@${c.username}`} className="btn-accent px-4 py-2 text-sm">
-                Send
-              </Link>
             </div>
           ))}
         </div>

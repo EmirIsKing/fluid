@@ -2,14 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Send, Activity, Users, User } from 'lucide-react';
+import { Home, Activity, Users, User } from 'lucide-react';
 import { useParticle } from '@/components/ParticleProvider';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
 const tabs = [
   { icon: Home, label: 'Home', path: '/dashboard' },
-  { icon: Send, label: 'Send', path: '/dashboard/send' },
   { icon: Activity, label: 'Activity', path: '/dashboard/activity' },
   { icon: Users, label: 'Contacts', path: '/dashboard/contacts' },
   { icon: User, label: 'Profile', path: '/dashboard/profile' },

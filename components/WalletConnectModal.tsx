@@ -22,7 +22,7 @@ export default function WalletConnectModal({ isOpen, onClose }: WalletConnectMod
       setStep('done');
       setTimeout(() => {
         onClose();
-        router.push('/dashboard');
+        router.push('/overview');
       }, 1800);
     }
   }, [isUpgrading, isConnected]);
