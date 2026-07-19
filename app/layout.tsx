@@ -5,7 +5,10 @@ import { mainnet, base, arbitrum, bsc, xLayer } from "viem/chains";
 import '../src/styles.css';
 import Providers from './providers';
 
-const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || "";
+const rawAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || "";
+const privyAppId = (rawAppId.startsWith('cl') || rawAppId.startsWith('cm')) && rawAppId.length >= 20
+  ? rawAppId
+  : "cl00000000000000000000000";
 
 export default function RootLayout({
   children,
