@@ -1,8 +1,9 @@
 'use client';
 
+import { getBytes } from 'ethers';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 // @ts-ignore — SDK ships without bundled types in some installs
-import { UniversalAccount, UNIVERSAL_ACCOUNT_VERSION } from '@particle-network/universal-account-sdk';
+import { UniversalAccount, UNIVERSAL_ACCOUNT_VERSION, CHAIN_ID, } from '@particle-network/universal-account-sdk';
 import {
   SUPPORTED_CHAIN_LABELS,
   resolveChainConfig,
@@ -21,6 +22,7 @@ import {
   getAssetUsdPrice,
   type RoutePreview,
   type PrimaryAsset,
+  useSignRootHash,
 } from '@shared/particle-utils';
 import { recordSendByWallet } from '@/app/actions/transactions';
 import { useAccount, useDisconnect, useModal, useWallets, useConnectors } from '@particle-network/connectkit';
@@ -124,6 +126,7 @@ function createUaInstance(ownerAddress: string) {
   const appId = process.env.NEXT_PUBLIC_APP_ID || process.env.NEXT_PUBLIC_PARTICLE_APP_UUID;
 
   if (!UniversalAccount || !projId || !appId) return null;
+
   return new UniversalAccount({
     projectId: projId,
     projectClientKey: clientKey,
@@ -131,13 +134,6 @@ function createUaInstance(ownerAddress: string) {
     ownerAddress: ownerAddress.toLowerCase(),
     tradeConfig: {
       slippageBps: 100,      // 1% slippage tolerance
-      universalGas: true,     // pay gas in PARTI where possible
-    },
-    smartAccountOptions: {
-      name: 'UNIVERSAL',
-      version: UNIVERSAL_ACCOUNT_VERSION,
-      ownerAddress: ownerAddress.toLowerCase(),
-      useEIP7702: true,
     },
   });
 }
@@ -393,6 +389,7 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
   );
 
 
+  const signHash = useSignRootHash();
 
   const delegateChain = async (chainId: number, chainName: string) => {
     if (mode === 'demo') {
@@ -414,7 +411,10 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
       receiver: ownerAddress,
     });
 
-    const signature = await signRootHash(transaction.rootHash, ownerAddress);
+    //const signature = await signRootHash(transaction.rootHash, ownerAddress);
+    const signature = signHash(transaction.rootHash);
+    console.log('Signature:', signature);
+
     const authorizations = await collectEip7702Authorizations(transaction, ownerAddress);
     if (authorizations.length) {
       await uaInstance.sendTransaction(transaction, signature, authorizations);
@@ -479,6 +479,8 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         receiver,
       });
 
+      console.log("amount", amount);
+
       const transaction = await uaInstance.createTransferTransaction({
         token: {
           chainId: destinationChain.chainId,
@@ -488,7 +490,10 @@ export function ParticleProvider({ children }: { children: React.ReactNode }) {
         receiver,
       });
 
-      const signature = await signRootHash(transaction.rootHash, ownerAddress);
+
+
+      const signature = await signHash(transaction.rootHash);
+      console.log("signature", signature);
       const result = await uaInstance.sendTransaction(transaction, signature);
       console.log("[ParticleProvider] sendTransaction Result:", result);
 

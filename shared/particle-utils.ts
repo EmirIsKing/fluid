@@ -6,6 +6,8 @@ import {
   type SupportedAsset,
   usdToTokenAmount,
 } from '@shared/chains';
+import { useWallets } from '@particle-network/connectkit';
+
 
 export type PrimaryAsset = {
   chainId: number;
@@ -32,27 +34,27 @@ export function normalizePrimaryAssets(rawAssets: unknown[]): PrimaryAsset[] {
     console.warn('[normalizePrimaryAssets] rawAssets is not an array!');
     return [];
   }
-  
+
   const normalized: PrimaryAsset[] = [];
-  
+
   for (const rawAsset of rawAssets) {
     if (!rawAsset || typeof rawAsset !== 'object') continue;
     const asset = rawAsset as Record<string, any>;
-    
+
     // Check if it has chainAggregation (modern SDK structure)
     if (Array.isArray(asset.chainAggregation)) {
       for (const item of asset.chainAggregation) {
         if (!item || !item.token) continue;
-        
+
         const amount = String(item.amount ?? '0');
         const amountInUSD = String(item.amountInUSD ?? '0');
         const symbol = String(item.token.symbol ?? item.token.type ?? asset.tokenType ?? 'UNKNOWN').toUpperCase();
         const chainId = Number(item.token.chainId ?? 0);
-        
+
         const chainConfig = SUPPORTED_CHAINS.find(c => c.chainId === chainId);
         const chainName = chainConfig ? chainConfig.value : 'Unknown';
         const tokenAddress = String(item.token.address ?? '');
-        
+
         // Use token amount instead of just USD value to ensure we don't drop tokens with no USD price
         if (parseFloat(amount) > 0 || parseFloat(amountInUSD) > 0) {
           normalized.push({
@@ -73,7 +75,7 @@ export function normalizePrimaryAssets(rawAssets: unknown[]): PrimaryAsset[] {
       const chainName = String(asset.chainName ?? asset.network ?? asset.chain ?? 'Unknown');
       const chainId = Number(asset.chainId ?? 0);
       const tokenAddress = String(asset.tokenAddress ?? asset.address ?? '');
-      
+
       if (symbol && (parseFloat(amount) > 0 || parseFloat(amountInUSD) > 0)) {
         normalized.push({
           chainId,
@@ -86,7 +88,7 @@ export function normalizePrimaryAssets(rawAssets: unknown[]): PrimaryAsset[] {
       }
     }
   }
-  
+
   console.log('[normalizePrimaryAssets] Output normalized:', JSON.stringify(normalized, null, 2));
   return normalized;
 }
@@ -127,6 +129,39 @@ export function estimateRoutePreview(
   };
 }
 
+
+import { hexToBytes, type Hex } from 'viem';
+
+export function useSignRootHash() {
+  const [primaryWallet] = useWallets();
+
+  // Accept a verified Hex string (0x...) or a raw message string
+  return async (messageHex: string): Promise<string> => {
+    if (!primaryWallet) {
+      throw new Error('No wallet instance found');
+    }
+
+    const walletClient = primaryWallet.getWalletClient();
+    const accountAddress = primaryWallet.accounts[0];
+
+    if (!walletClient || !accountAddress) {
+      throw new Error('No wallet connected');
+    }
+
+    // 1. Convert the hex string hash into a raw byte array (equivalent to ethers' getBytes)
+    const rawBytes = hexToBytes(messageHex as Hex);
+
+    // 2. Pass the byte array explicitly into the message field
+    const signature = await walletClient.signMessage({
+      account: accountAddress as `0x${string}`,
+      message: { raw: rawBytes }, // Viem natively accepts Uint8Array raw bytes here
+    });
+
+    return signature;
+  };
+}
+
+
 export async function signRootHash(
   rootHash: string,
   ownerAddress: string,
@@ -139,7 +174,7 @@ export async function signRootHash(
     method: 'personal_sign',
     params: [message, ownerAddress.toLowerCase()],
   }) as string;
-  
+
   return Signature.from(rawSignature).serialized;
 }
 
@@ -160,10 +195,10 @@ export async function collectEip7702Authorizations(
 
     if (!signature) {
       console.log('[collectEip7702Authorizations] Requesting EIP-7702 auth for:', auth);
-      
+
       const typedData = buildEip7702TypedData(auth, ownerAddress.toLowerCase());
       console.log('[collectEip7702Authorizations] Typed Data:', typedData);
-      
+
       let rawSignature;
       try {
         rawSignature = (await ethereum.request({
